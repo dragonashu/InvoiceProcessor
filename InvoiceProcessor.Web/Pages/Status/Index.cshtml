@@ -1,0 +1,34 @@
+@page "/Status"
+@model InvoiceProcessor.Web.Pages.Status.IndexModel
+
+<h2>Processing Status</h2>
+<form method="get">
+  <label>Status:</label>
+  <select name="Status">
+    <option value="">All</option>
+    @foreach (var s in Enum.GetValues<InvoiceProcessor.Web.Enums.PostingJobStatus>())
+    {
+      <option value="@s" selected="@(Model.Status == s)">@s</option>
+    }
+  </select>
+  <button type="submit">Filter</button>
+</form>
+
+<table>
+<thead><tr><th>Job ID</th><th>Supplier</th><th>Invoice</th><th>Status</th><th>ERP Doc #</th><th>Error</th><th>Created</th><th>Completed</th></tr></thead>
+<tbody>
+@foreach (var job in Model.Jobs)
+{
+  <tr>
+    <td>@job.Id</td>
+    <td>@(job.Document.Supplier?.Name ?? "Unknown")</td>
+    <td>@job.Document.InvoiceNo</td>
+    <td>@job.Status</td>
+    <td>@job.ErpDocNo</td>
+    <td>@job.ErrorCategory - @job.ErrorMessage</td>
+    <td>@job.CreatedAt</td>
+    <td>@job.CompletedAt</td>
+  </tr>
+}
+</tbody>
+</table>

@@ -1,0 +1,39 @@
+@page "/Inbox"
+@model InvoiceProcessor.Web.Pages.Inbox.IndexModel
+
+<h2>Inbox / Selection</h2>
+<form method="get">
+  <label>Supplier:</label>
+  <select name="SupplierId">
+      <option value="">All</option>
+      @foreach (var supplier in Model.Suppliers)
+      {
+          var selected = Model.SupplierId == supplier.Id ? "selected" : null;
+          <option value="@supplier.Id" selected="@selected">@supplier.Name (@supplier.ReceivedCount/@supplier.ReadyCount/@supplier.ReviewCount)</option>
+      }
+  </select>
+  <button type="submit">Auto-refresh</button>
+</form>
+
+<form method="post" asp-page-handler="SendJob">
+  <table>
+    <thead><tr><th>Select</th><th>Supplier</th><th>Type</th><th>Date</th><th>Invoice #</th><th>Total</th><th>Status</th><th>Links</th></tr></thead>
+    <tbody>
+    @foreach (var doc in Model.Documents)
+    {
+        var selectable = doc.DocType == InvoiceProcessor.Web.Enums.DocumentType.Invoice && (doc.Status == InvoiceProcessor.Web.Enums.DocumentStatus.ReadyToPost || doc.Status == InvoiceProcessor.Web.Enums.DocumentStatus.NeedsReview || doc.Status == InvoiceProcessor.Web.Enums.DocumentStatus.Validated);
+        <tr>
+          <td>@if (selectable) { <input type="checkbox" name="SelectedDocumentIds" value="@doc.Id" /> }</td>
+          <td>@(doc.Supplier?.Name ?? "Unknown")</td>
+          <td>@doc.DocType</td>
+          <td>@doc.InvoiceDate</td>
+          <td>@doc.InvoiceNo</td>
+          <td>@doc.GrossTotal</td>
+          <td>@doc.Status</td>
+          <td><a href="/ui/documents/@doc.Id/pdf" target="_blank">PDF</a> | <a href="/ui/documents/@doc.Id/canonical" target="_blank">JSON</a></td>
+        </tr>
+    }
+    </tbody>
+  </table>
+  <button type="submit">Send job</button>
+</form>
