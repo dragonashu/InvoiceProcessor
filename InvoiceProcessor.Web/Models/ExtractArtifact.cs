@@ -7,5 +7,5 @@ public class ExtractArtifact
     public Document Document { get; set; } = default!;
     public string ExtractedJson { get; set; } = "{}";
     public string CanonicalJson { get; set; } = "{}";
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

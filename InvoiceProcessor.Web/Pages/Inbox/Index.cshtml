@@ -1,39 +1,133 @@
 @page "/Inbox"
 @model InvoiceProcessor.Web.Pages.Inbox.IndexModel
 
-<h2>Inbox / Selection</h2>
-<form method="get">
-  <label>Supplier:</label>
-  <select name="SupplierId">
-      <option value="">All</option>
-      @foreach (var supplier in Model.Suppliers)
-      {
-          var selected = Model.SupplierId == supplier.Id ? "selected" : null;
-          <option value="@supplier.Id" selected="@selected">@supplier.Name (@supplier.ReceivedCount/@supplier.ReadyCount/@supplier.ReviewCount)</option>
-      }
-  </select>
-  <button type="submit">Auto-refresh</button>
-</form>
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+    <div class="page-header" style="margin-bottom: 0;">
+        <h1 class="page-title">Inbox</h1>
+        <p class="page-subtitle">Facturi primite, grupate pe furnizor</p>
+    </div>
+    <form method="post">
+        <button type="submit" asp-page-handler="Refresh" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Reimporta fisiere
+        </button>
+    </form>
+</div>
 
-<form method="post" asp-page-handler="SendJob">
-  <table>
-    <thead><tr><th>Select</th><th>Supplier</th><th>Type</th><th>Date</th><th>Invoice #</th><th>Total</th><th>Status</th><th>Links</th></tr></thead>
-    <tbody>
-    @foreach (var doc in Model.Documents)
-    {
-        var selectable = doc.DocType == InvoiceProcessor.Web.Enums.DocumentType.Invoice && (doc.Status == InvoiceProcessor.Web.Enums.DocumentStatus.ReadyToPost || doc.Status == InvoiceProcessor.Web.Enums.DocumentStatus.NeedsReview || doc.Status == InvoiceProcessor.Web.Enums.DocumentStatus.Validated);
-        <tr>
-          <td>@if (selectable) { <input type="checkbox" name="SelectedDocumentIds" value="@doc.Id" /> }</td>
-          <td>@(doc.Supplier?.Name ?? "Unknown")</td>
-          <td>@doc.DocType</td>
-          <td>@doc.InvoiceDate</td>
-          <td>@doc.InvoiceNo</td>
-          <td>@doc.GrossTotal</td>
-          <td>@doc.Status</td>
-          <td><a href="/ui/documents/@doc.Id/pdf" target="_blank">PDF</a> | <a href="/ui/documents/@doc.Id/canonical" target="_blank">JSON</a></td>
-        </tr>
-    }
-    </tbody>
-  </table>
-  <button type="submit">Send job</button>
-</form>
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-success">@Model.Message</div>
+}
+
+@if (Model.SupplierGroups.Count == 0)
+{
+    <div class="card">
+        <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            <p>Niciun document in inbox.<br/>Adauga fisiere PDF in folderul <code>samples/</code> si asteapta urmatorul ciclu de procesare.</p>
+        </div>
+    </div>
+}
+else
+{
+    <form method="post" asp-page-handler="SendJob">
+        @foreach (var group in Model.SupplierGroups)
+        {
+            <details class="supplier-group" @(group.ReadyCount > 0 ? "open" : "")>
+                <summary class="supplier-header">
+                    <svg class="supplier-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="supplier-name">@group.SupplierName</span>
+                    @if (group.SupplierVat != null)
+                    {
+                        <span class="supplier-vat">@group.SupplierVat</span>
+                    }
+                    <span class="supplier-counts">
+                        <span class="count-total">@group.TotalCount factura(e)</span>
+                        @if (group.ReadyCount > 0)
+                        {
+                            <span class="badge status-ready">@group.ReadyCount gata</span>
+                        }
+                        @if (group.ReviewCount > 0)
+                        {
+                            <span class="badge status-review">@group.ReviewCount verificare</span>
+                        }
+                        @if (group.ProcessingCount > 0)
+                        {
+                            <span class="badge status-processing">@group.ProcessingCount procesare</span>
+                        }
+                    </span>
+                </summary>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th class="col-check">
+                                <input type="checkbox" class="select-all-supplier" title="Selecteaza tot" />
+                            </th>
+                            <th>Nr. factura</th>
+                            <th>Data</th>
+                            <th>Total</th>
+                            <th>Tip</th>
+                            <th>Stare</th>
+                            <th>Incredere</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var doc in group.Documents)
+                        {
+                            var selectable = IndexModel.IsSelectable(doc);
+                            <tr>
+                                <td class="col-check">
+                                    @if (selectable)
+                                    {
+                                        <input type="checkbox" name="SelectedDocumentIds" value="@doc.Id" />
+                                    }
+                                </td>
+                                <td style="font-weight:600;">@(doc.InvoiceNo ?? doc.Filename)</td>
+                                <td>@doc.InvoiceDate?.ToString("dd/MM/yyyy")</td>
+                                <td class="num">@doc.GrossTotal?.ToString("N2")</td>
+                                <td><span class="badge status-processing">@doc.DocType</span></td>
+                                <td><span class="badge @IndexModel.StatusCssClass(doc.Status)">@IndexModel.StatusDisplayName(doc.Status)</span></td>
+                                <td class="num">@doc.Confidence.ToString("P0")</td>
+                                <td>
+                                    <span class="row-actions">
+                                        <a href="/Inbox/Edit/@doc.Id">Editeaza</a>
+                                        <a href="/Inbox/Preview/@doc.Id">Previzualizare</a>
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
+        }
+
+        <div class="actions-bar">
+            <button type="submit" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Trimite selectia la robot
+            </button>
+        </div>
+    </form>
+
+    <script>
+        document.querySelectorAll('.select-all-supplier').forEach(function (masterCb) {
+            var table = masterCb.closest('table');
+            var rowCbs = table.querySelectorAll('tbody input[type="checkbox"]');
+
+            masterCb.addEventListener('change', function () {
+                rowCbs.forEach(function (cb) { cb.checked = masterCb.checked; });
+            });
+
+            rowCbs.forEach(function (cb) {
+                cb.addEventListener('change', function () {
+                    var allChecked = Array.from(rowCbs).every(function (c) { return c.checked; });
+                    var anyChecked = Array.from(rowCbs).some(function (c) { return c.checked; });
+                    masterCb.checked = allChecked;
+                    masterCb.indeterminate = !allChecked && anyChecked;
+                });
+            });
+        });
+    </script>
+}

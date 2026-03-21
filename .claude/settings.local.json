@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(dotnet run:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(nuget search:*)",
+      "Bash(dotnet build:*)",
+      "Bash(tasklist:*)",
+      "Bash(sqlite3:*)"
+    ]
+  }
+}

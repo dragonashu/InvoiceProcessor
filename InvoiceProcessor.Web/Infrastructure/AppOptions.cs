@@ -23,6 +23,7 @@ public class StorageOptions
 {
     public string InboxRoot { get; set; } = "./data/inbox";
     public string StoreRoot { get; set; } = "./data/store";
+    public string SourceFolder { get; set; } = "./samples";
 }
 
 public class ExtractionOptions

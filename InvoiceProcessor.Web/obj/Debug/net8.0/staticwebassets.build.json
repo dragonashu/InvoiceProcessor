@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "wF1NJG852VKAUGyiQHo95ymgbBk3iD+DdGO1EMEbXdk=",
+  "Source": "InvoiceProcessor.Web",
+  "BasePath": "_content/InvoiceProcessor.Web",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}

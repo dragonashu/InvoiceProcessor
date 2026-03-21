@@ -8,5 +8,5 @@ public class AuditEvent
     public string EventType { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
     public string PayloadJson { get; set; } = "{}";
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -1,0 +1,169 @@
+@page "/Inbox/Preview/{id:guid}"
+@model InvoiceProcessor.Web.Pages.Inbox.PreviewModel
+
+<div class="preview-topbar">
+    <h2>@(Model.Doc.InvoiceNo ?? Model.Doc.Filename)</h2>
+    <div style="display: flex; gap: 8px;">
+        <a href="/Inbox/Edit/@Model.Doc.Id" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Editeaza
+        </a>
+        <a href="/Inbox" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            Inapoi la Inbox
+        </a>
+    </div>
+</div>
+
+<div class="preview-container">
+    <div class="pdf-panel">
+        <iframe src="/ui/documents/@Model.Doc.Id/pdf#toolbar=1&navpanes=0&view=FitH"></iframe>
+    </div>
+
+    <div class="details-panel">
+        @if (Model.Invoice is not null)
+        {
+            var inv = Model.Invoice;
+            var conf = inv.Metadata?.Confidence ?? Model.Doc.Confidence;
+            var confClass = conf >= 0.8m ? "confidence-high" : conf >= 0.6m ? "confidence-mid" : "confidence-low";
+
+            <div class="section-title">Detalii factura</div>
+            <div class="field-grid">
+                <div class="field">
+                    <div class="field-label">Furnizor</div>
+                    <div class="field-value">@(inv.Supplier ?? "Necunoscut")</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Nr. factura</div>
+                    <div class="field-value mono">@(inv.InvoiceNo ?? "N/A")</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Data</div>
+                    <div class="field-value">@(inv.InvoiceDate?.ToString("dd/MM/yyyy") ?? "N/A")</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Moneda</div>
+                    <div class="field-value">@(inv.Currency ?? "N/A")</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Total net</div>
+                    <div class="field-value mono">@(inv.NetTotal?.ToString("N2") ?? "N/A")</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">TVA</div>
+                    <div class="field-value mono">@(inv.VatTotal?.ToString("N2") ?? "N/A")</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Total brut</div>
+                    <div class="field-value mono">@(inv.GrossTotal?.ToString("N2") ?? "N/A")</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Incredere</div>
+                    <div class="field-value">
+                        <span class="confidence-bar">
+                            <span class="confidence-track">
+                                <span class="confidence-fill @confClass" style="width: @((int)(conf * 100))%;"></span>
+                            </span>
+                            @conf.ToString("P0")
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field-grid">
+                <div class="field">
+                    <div class="field-label">Stare</div>
+                    <div class="field-value"><span class="badge @IndexModel.StatusCssClass(Model.Doc.Status)">@IndexModel.StatusDisplayName(Model.Doc.Status)</span></div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Strategie</div>
+                    <div class="field-value" style="font-size:13px; font-family: var(--font-mono);">@(inv.Metadata?.Strategy ?? "N/A")</div>
+                </div>
+            </div>
+
+            @if (inv.Metadata?.Notes is not null)
+            {
+                <div class="meta-notes">@inv.Metadata.Notes</div>
+            }
+
+            @if (inv.Lines.Count > 0)
+            {
+                <div class="section-title">Linii factura (@inv.Lines.Count)</div>
+                var hasBare = inv.Lines.Any(l => !string.IsNullOrEmpty(l.Bare));
+                var lineSum = inv.Lines.Sum(l => l.LineTotal);
+                var compareTotal = inv.NetTotal ?? inv.GrossTotal ?? 0m;
+                var compareLabel = inv.NetTotal.HasValue ? "total net" : "total brut";
+                var tolerance = compareTotal * 0.01m;
+                var sumMatches = compareTotal != 0m && Math.Abs(lineSum - compareTotal) <= tolerance;
+                <table class="lines-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Cod</th>
+                            <th>Descriere</th>
+                            @if (hasBare)
+                            {
+                                <th class="num">Bare</th>
+                            }
+                            <th class="num">Cant.</th>
+                            <th>UM</th>
+                            <th class="num">Pret unitar</th>
+                            <th class="num">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ var lineNo = 0; }
+                        @foreach (var line in inv.Lines)
+                        {
+                            lineNo++;
+                            var expected = line.UnitPrice.HasValue ? line.Qty * line.UnitPrice.Value : (decimal?)null;
+                            var lineMatch = expected.HasValue && Math.Abs(expected.Value - line.LineTotal) <= 0.02m;
+                            var lineCellClass = expected.HasValue ? (lineMatch ? "line-ok" : "line-err") : "";
+                            <tr>
+                                <td>@lineNo</td>
+                                <td style="font-family: var(--font-mono); font-size: 12px;">@(line.VendorItemCode ?? "-")</td>
+                                <td>@line.DescriptionRaw</td>
+                                @if (hasBare)
+                                {
+                                    <td class="num">@(line.Bare ?? "-")</td>
+                                }
+                                <td class="num">@line.Qty.ToString("N2")</td>
+                                <td>@(line.Uom ?? "-")</td>
+                                <td class="num">@(line.UnitPrice?.ToString("N4") ?? "-")</td>
+                                <td class="num @lineCellClass">@line.LineTotal.ToString("N2")</td>
+                            </tr>
+                        }
+                        <tr class="totals-row @(sumMatches ? "validation-pass" : "validation-fail")">
+                            <td colspan="@(hasBare ? 7 : 6)" style="text-align:right;">
+                                <span class="validation-icon">@(sumMatches ? "\u2713" : "\u2717")</span>
+                                Suma linii vs @compareLabel (@compareTotal.ToString("N2"))
+                            </td>
+                            <td class="num">@lineSum.ToString("N2")</td>
+                        </tr>
+                    </tbody>
+                </table>
+            }
+        }
+        else
+        {
+            <div class="section-title">Informatii document</div>
+            <div class="field-grid">
+                <div class="field">
+                    <div class="field-label">Fisier</div>
+                    <div class="field-value">@Model.Doc.Filename</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Stare</div>
+                    <div class="field-value"><span class="badge @IndexModel.StatusCssClass(Model.Doc.Status)">@IndexModel.StatusDisplayName(Model.Doc.Status)</span></div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Tip</div>
+                    <div class="field-value">@Model.Doc.DocType</div>
+                </div>
+            </div>
+            <div class="empty-state">
+                <p>Nu exista date extrase momentan.</p>
+            </div>
+        }
+    </div>
+</div>

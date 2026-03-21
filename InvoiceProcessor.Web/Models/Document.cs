@@ -5,7 +5,7 @@ namespace InvoiceProcessor.Web.Models;
 public class Document
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string Source { get; set; } = "EMAIL";
     public string? EmailFrom { get; set; }
     public string? EmailSubject { get; set; }

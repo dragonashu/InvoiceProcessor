@@ -1,0 +1,119 @@
+@page "/Stats"
+@model InvoiceProcessor.Web.Pages.Stats.IndexModel
+
+<div class="page-header">
+    <h1 class="page-title">Stats</h1>
+    <p class="page-subtitle">Statistici generale procesare facturi</p>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card-label">Total documente</div>
+        <div class="stat-card-value">@Model.TotalDocuments</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-label">Joburi robot</div>
+        <div class="stat-card-value">@Model.TotalJobs</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-label">Rata succes</div>
+        <div class="stat-card-value" style="color: @(Model.SuccessRate >= 0.8m ? "var(--c-success)" : Model.SuccessRate >= 0.5m ? "var(--c-warning)" : "var(--c-danger)")">
+            @(Model.TotalJobs > 0 ? Model.SuccessRate.ToString("P0") : "-")
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-label">Valoare totala postata</div>
+        <div class="stat-card-value" style="font-size: 22px;">@Model.TotalValueProcessed.ToString("N2")</div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div class="card">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;">Documente pe stare</div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Stare</th>
+                        <th class="num">Numar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var status in Enum.GetValues<InvoiceProcessor.Web.Enums.DocumentStatus>())
+                    {
+                        if (Model.DocumentsByStatus.TryGetValue(status, out var count) && count > 0)
+                        {
+                            <tr>
+                                <td><span class="badge @StatusCss(status)">@status</span></td>
+                                <td class="num">@count</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;">Documente pe furnizor</div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Furnizor</th>
+                        <th class="num">Facturi</th>
+                        <th class="num">Valoare totala</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in Model.DocumentsBySupplier)
+                    {
+                        <tr>
+                            <td style="font-weight: 600;">@s.Name</td>
+                            <td class="num">@s.Count</td>
+                            <td class="num">@s.TotalValue.ToString("N2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@if (Model.TotalJobs > 0)
+{
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;">Rezultate robot</div>
+            <div class="stat-cards" style="margin-bottom: 0;">
+                <div class="stat-card" style="border-color: var(--c-success-border);">
+                    <div class="stat-card-label">Succes</div>
+                    <div class="stat-card-value" style="color: var(--c-success);">@Model.SuccessJobs</div>
+                </div>
+                <div class="stat-card" style="border-color: var(--c-warning-border);">
+                    <div class="stat-card-label">Partial / Manual</div>
+                    <div class="stat-card-value" style="color: var(--c-warning);">@Model.PartialJobs</div>
+                </div>
+                <div class="stat-card" style="border-color: var(--c-danger); border-color: #fca5a5;">
+                    <div class="stat-card-label">Esuat</div>
+                    <div class="stat-card-value" style="color: var(--c-danger);">@Model.FailedJobs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">In asteptare</div>
+                    <div class="stat-card-value">@(Model.TotalJobs - Model.SuccessJobs - Model.FailedJobs - Model.PartialJobs)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@functions {
+    static string StatusCss(InvoiceProcessor.Web.Enums.DocumentStatus status) => status switch
+    {
+        InvoiceProcessor.Web.Enums.DocumentStatus.ReadyToPost => "status-ready",
+        InvoiceProcessor.Web.Enums.DocumentStatus.NeedsReview => "status-review",
+        InvoiceProcessor.Web.Enums.DocumentStatus.Posted => "status-posted",
+        InvoiceProcessor.Web.Enums.DocumentStatus.Failed or InvoiceProcessor.Web.Enums.DocumentStatus.NeedsOcr => "status-failed",
+        _ => "status-processing"
+    };
+}

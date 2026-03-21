@@ -1,0 +1,103 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\InvoiceProcessor.Web.csproj": {}
+  },
+  "projects": {
+    "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\InvoiceProcessor.Web.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\InvoiceProcessor.Web.csproj",
+        "projectName": "InvoiceProcessor.Web",
+        "projectPath": "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\InvoiceProcessor.Web.csproj",
+        "packagesPath": "C:\\Users\\fusea\\.nuget\\packages\\",
+        "outputPath": "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\fusea\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Users\\fusea\\source\\repos\\UiPath.Activities.DeboraProjectAnalyzer\\UiPath.Activities.DeboraProjectAnalyzer\\Output\\Activities\\Packages": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://www.myget.org/F/uipath-dev/api/v3/index.json": {},
+          "https://www.myget.org/F/workflow": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.100"
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "MailKit": {
+              "target": "Package",
+              "version": "[4.8.0, )"
+            },
+            "Microsoft.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[8.0.7, )"
+            },
+            "Microsoft.EntityFrameworkCore.Design": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.7, )"
+            },
+            "Microsoft.EntityFrameworkCore.Sqlite": {
+              "target": "Package",
+              "version": "[8.0.7, )"
+            },
+            "PdfPig": {
+              "target": "Package",
+              "version": "[0.1.13, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.102/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

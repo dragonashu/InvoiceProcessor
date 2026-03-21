@@ -17,7 +17,7 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
 
         foreach (var doc in docs)
         {
-            if (doc.Status is not (DocumentStatus.ReadyToPost or DocumentStatus.NeedsReview)) continue;
+            if (doc.Status is not DocumentStatus.ReadyToPost) continue;
 
             var canonical = JsonSerializer.Deserialize<CanonicalInvoice>(doc.ExtractArtifact?.CanonicalJson ?? "{}");
             if (canonical is null) continue;
@@ -51,6 +51,19 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
         return jobs;
     }
 
+    public async Task<IReadOnlyList<PostingJob>> ListJobsAsync(PostingJobStatus? status, int limit, CancellationToken cancellationToken)
+    {
+        var query = db.PostingJobs.Include(j => j.Document).AsQueryable();
+        if (status.HasValue)
+            query = query.Where(j => j.Status == status.Value);
+        return await query.OrderBy(j => j.CreatedAt).Take(limit).ToListAsync(cancellationToken);
+    }
+
+    public async Task<PostingJob?> GetJobAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        return await db.PostingJobs.Include(j => j.Document).FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+    }
+
     public async Task<ReadyToPostInvoicePayload?> ClaimNextJobAsync(CancellationToken cancellationToken)
     {
         var job = await db.PostingJobs
@@ -61,10 +74,39 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
         if (job is null) return null;
 
         job.Status = PostingJobStatus.Claimed;
-        job.ClaimedAt = DateTimeOffset.UtcNow;
+        job.ClaimedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
         return JsonSerializer.Deserialize<ReadyToPostInvoicePayload>(job.RequestJson);
+    }
+
+    public async Task<PostingJob> UpdateJobAsync(Guid jobId, RobotUpdateRequest request, CancellationToken cancellationToken)
+    {
+        var job = await db.PostingJobs.Include(j => j.Document).FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken)
+                  ?? throw new InvalidOperationException("Job not found");
+
+        if (request.Status is not null && Enum.TryParse<PostingJobStatus>(request.Status, true, out var newStatus))
+        {
+            job.Status = newStatus;
+            if (newStatus == PostingJobStatus.Running && job.ClaimedAt is null)
+                job.ClaimedAt = DateTime.UtcNow;
+        }
+
+        if (request.ErpDocNo is not null) job.ErpDocNo = request.ErpDocNo;
+        if (request.ErrorCategory is not null) job.ErrorCategory = request.ErrorCategory;
+        if (request.ErrorMessage is not null) job.ErrorMessage = request.ErrorMessage;
+        if (request.ResultJson is not null) job.ResultJson = request.ResultJson;
+
+        db.AuditEvents.Add(new AuditEvent
+        {
+            DocumentId = job.DocumentId,
+            EventType = "ROBOT_UPDATE",
+            Message = $"Job updated: {job.Status}",
+            PayloadJson = JsonSerializer.Serialize(request)
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+        return job;
     }
 
     public async Task CompleteJobAsync(Guid jobId, RobotCompleteRequest request, CancellationToken cancellationToken)
@@ -72,7 +114,7 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
         var job = await db.PostingJobs.Include(j => j.Document).FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken)
                   ?? throw new InvalidOperationException("Job not found");
 
-        job.CompletedAt = DateTimeOffset.UtcNow;
+        job.CompletedAt = DateTime.UtcNow;
         job.ResultJson = request.ResultJson;
         job.ErpDocNo = request.ErpDocNo;
         job.ErrorCategory = request.ErrorCategory;

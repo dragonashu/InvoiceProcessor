@@ -1,34 +1,109 @@
 @page "/Status"
 @model InvoiceProcessor.Web.Pages.Status.IndexModel
 
-<h2>Processing Status</h2>
-<form method="get">
-  <label>Status:</label>
-  <select name="Status">
-    <option value="">All</option>
-    @foreach (var s in Enum.GetValues<InvoiceProcessor.Web.Enums.PostingJobStatus>())
-    {
-      <option value="@s" selected="@(Model.Status == s)">@s</option>
-    }
-  </select>
-  <button type="submit">Filter</button>
-</form>
+<div class="page-header">
+    <h1 class="page-title">Status</h1>
+    <p class="page-subtitle">Urmarire joburi de postare si rezultate</p>
+</div>
 
-<table>
-<thead><tr><th>Job ID</th><th>Supplier</th><th>Invoice</th><th>Status</th><th>ERP Doc #</th><th>Error</th><th>Created</th><th>Completed</th></tr></thead>
-<tbody>
-@foreach (var job in Model.Jobs)
+@if (!string.IsNullOrEmpty(Model.Message))
 {
-  <tr>
-    <td>@job.Id</td>
-    <td>@(job.Document.Supplier?.Name ?? "Unknown")</td>
-    <td>@job.Document.InvoiceNo</td>
-    <td>@job.Status</td>
-    <td>@job.ErpDocNo</td>
-    <td>@job.ErrorCategory - @job.ErrorMessage</td>
-    <td>@job.CreatedAt</td>
-    <td>@job.CompletedAt</td>
-  </tr>
+    <div class="alert alert-success">@Model.Message</div>
 }
-</tbody>
-</table>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <form method="get" class="form-inline" style="margin-bottom: 0;">
+        <label for="statusFilter">Stare</label>
+        <select name="Status" id="statusFilter" class="form-select">
+            <option value="">Toate</option>
+            @foreach (var s in Enum.GetValues<InvoiceProcessor.Web.Enums.PostingJobStatus>())
+            {
+                <option value="@s" selected="@(Model.Status == s)">@PostingStatusName(s)</option>
+            }
+        </select>
+        <button type="submit" class="btn btn-secondary">Filtreaza</button>
+    </form>
+
+    <form method="post" style="display: flex; gap: 8px;">
+        <button type="submit" asp-page-handler="TestRpa" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Test RPA
+        </button>
+        <button type="submit" asp-page-handler="RemoveJobs" class="btn btn-secondary" style="color: var(--c-danger);"
+                onclick="return confirm('Stergi toate joburile si resetezi documentele?')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Sterge toate joburile
+        </button>
+    </form>
+</div>
+
+@if (Model.Jobs.Count == 0)
+{
+    <div class="card">
+        <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <p>Niciun job de postare gasit.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card status-table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Furnizor</th>
+                    <th>Nr. factura</th>
+                    <th>Nr. document</th>
+                    <th>Stare</th>
+                    <th>Doc. ERP</th>
+                    <th>Eroare</th>
+                    <th>Creat</th>
+                    <th>Finalizat</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var job in Model.Jobs)
+                {
+                    <tr>
+                        <td style="font-weight: 600;">@(job.Document.Supplier?.Name ?? "Necunoscut")</td>
+                        <td style="font-family: var(--font-mono); font-size: 13px;">@job.Document.InvoiceNo</td>
+                        <td style="font-family: var(--font-mono); font-size: 13px;">@job.Document.Filename</td>
+                        <td><span class="badge @StatusBadge(job.Status)">@PostingStatusName(job.Status)</span></td>
+                        <td style="font-family: var(--font-mono); font-size: 13px;">@job.ErpDocNo</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(job.ErrorCategory))
+                            {
+                                <span style="color: var(--c-danger); font-size: 13px;">@job.ErrorCategory: @job.ErrorMessage</span>
+                            }
+                        </td>
+                        <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CompletedAt?.ToString("dd/MM/yyyy HH:mm")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@functions {
+    static string StatusBadge(InvoiceProcessor.Web.Enums.PostingJobStatus status) => status switch
+    {
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Queued => "status-processing",
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Claimed => "status-review",
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Success => "status-ready",
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Failed => "status-failed",
+        _ => "status-posted"
+    };
+
+    static string PostingStatusName(InvoiceProcessor.Web.Enums.PostingJobStatus status) => status switch
+    {
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Queued => "In asteptare",
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Claimed => "Preluat",
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Running => "In executie",
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Success => "Finalizat",
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Failed => "Eroare",
+        InvoiceProcessor.Web.Enums.PostingJobStatus.Partial => "Partial",
+        _ => status.ToString()
+    };
+}

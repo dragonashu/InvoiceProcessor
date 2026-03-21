@@ -1,0 +1,49 @@
+{
+  "name": "InvoiceRobot",
+  "projectId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "description": "Claims and processes invoice posting jobs from InvoiceProcessor API",
+  "main": "Main.xaml",
+  "dependencies": {
+    "UiPath.System.Activities": "[23.10.6]",
+    "UiPath.UIAutomation.Activities": "[23.10.8]",
+    "UiPath.Web.Activities": "[1.18.0]"
+  },
+  "webServices": [],
+  "entryPoints": [
+    {
+      "filePath": "Main.xaml",
+      "uniqueId": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+      "input": [],
+      "output": []
+    }
+  ],
+  "schemaVersion": "4.0",
+  "studioVersion": "23.10.0",
+  "projectVersion": "1.0.0",
+  "runtimeOptions": {
+    "autoDispose": false,
+    "netFrameworkLazyLoading": false,
+    "isPausable": true,
+    "isAttended": false,
+    "requiresUserInteraction": false,
+    "supportsPersistence": false,
+    "workflowSerialization": "DataContract",
+    "excludedLoggedData": [
+      "Private:*",
+      "Password"
+    ],
+    "executionType": "Workflow"
+  },
+  "designOptions": {
+    "projectProfile": "Developement",
+    "outputType": "Process",
+    "libraryOptions": {
+      "includeOriginalXaml": false,
+      "privateWorkflows": []
+    }
+  },
+  "expressionLanguage": "VisualBasic",
+  "isTemplate": false,
+  "templateProjectData": {},
+  "publishData": {}
+}

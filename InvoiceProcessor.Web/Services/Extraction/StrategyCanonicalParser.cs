@@ -34,10 +34,5 @@ public class StrategyCanonicalParser : ICanonicalParser
         return JsonSerializer.Serialize(model);
     }
 
-    private static decimal? TryParseDecimal(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var normalized = value.Replace(" ", string.Empty).Replace(",", ".");
-        return decimal.TryParse(normalized, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
-    }
+    private static decimal? TryParseDecimal(string? value) => EuropeanNumberParser.TryParse(value);
 }

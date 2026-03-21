@@ -1,4 +1,5 @@
 using System.Text.Json;
+using InvoiceProcessor.Web.Contracts;
 using InvoiceProcessor.Web.Data;
 using InvoiceProcessor.Web.Enums;
 using InvoiceProcessor.Web.Models;
@@ -13,6 +14,8 @@ public class PdfExtractionPipeline(
     IDocumentClassifier classifier,
     ICanonicalParser parser,
     IMatchingEngine matchingEngine,
+    IInvoiceValidator invoiceValidator,
+    IEnumerable<ISupplierInvoiceExtractor> supplierExtractors,
     ILogger<PdfExtractionPipeline> logger) : IExtractionPipeline
 {
     public async Task ProcessPendingAsync(CancellationToken cancellationToken)
@@ -36,10 +39,11 @@ public class PdfExtractionPipeline(
         document.Status = DocumentStatus.Extracting;
         await db.SaveChangesAsync(cancellationToken);
 
+        PdfDocument pdf;
         string text;
         try
         {
-            using var pdf = PdfDocument.Open(document.StoragePath);
+            pdf = PdfDocument.Open(document.StoragePath);
             text = string.Join("\n", pdf.GetPages().Select(p => p.Text));
         }
         catch (Exception ex)
@@ -50,52 +54,117 @@ public class PdfExtractionPipeline(
             return;
         }
 
-        if (text.Length < 100)
+        using (pdf)
         {
-            document.Status = DocumentStatus.NeedsOcr;
-            await SaveArtifact(document.Id, JsonSerializer.Serialize(new { textLength = text.Length, reason = "No embedded text" }), "{}", cancellationToken);
-            return;
+            if (text.Length < 100)
+            {
+                document.Status = DocumentStatus.NeedsOcr;
+                await SaveArtifact(document.Id, JsonSerializer.Serialize(new { textLength = text.Length, reason = "No embedded text" }), "{}", cancellationToken);
+                return;
+            }
+
+            document.Status = DocumentStatus.Extracted;
+            var cls = classifier.Classify(text);
+            document.DocType = cls.type;
+            document.Confidence = cls.confidence;
+            document.Status = cls.confidence < 0.6m ? DocumentStatus.NeedsReview : DocumentStatus.Classified;
+
+            var suppliers = await db.Suppliers.Where(s => s.Active).ToListAsync(cancellationToken);
+            var supplier = suppliers.FirstOrDefault(s => !string.IsNullOrWhiteSpace(cls.vatNo) && s.VatNo == cls.vatNo)
+                           ?? suppliers.FirstOrDefault(s => cls.supplierName is not null && (s.Name.Contains(cls.supplierName, StringComparison.OrdinalIgnoreCase) || s.AliasesJson.Contains(cls.supplierName, StringComparison.OrdinalIgnoreCase)));
+            if (supplier is not null)
+            {
+                document.SupplierId = supplier.Id;
+            }
+            else
+            {
+                document.Status = DocumentStatus.NeedsReview;
+            }
+
+            // Try supplier-specific extractors first
+            string canonical;
+            var matchedExtractor = supplierExtractors.FirstOrDefault(e => e.CanHandle(text));
+            if (matchedExtractor != null && cls.type != DocumentType.MaterialsList)
+            {
+                var invoice = matchedExtractor.Extract(pdf, text);
+                canonical = JsonSerializer.Serialize(invoice);
+
+                // Populate document header fields from the extracted data
+                document.InvoiceNo = invoice.InvoiceNo;
+                document.InvoiceDate = invoice.InvoiceDate;
+                document.GrossTotal = invoice.GrossTotal;
+
+                logger.LogInformation("Used supplier extractor '{Extractor}' for document {DocumentId}",
+                    matchedExtractor.SupplierKey, documentId);
+
+                // Second-pass supplier match using extractor's supplier name if classifier didn't find one
+                if (document.SupplierId is null && invoice.Supplier is not null)
+                {
+                    supplier = suppliers.FirstOrDefault(s =>
+                        s.Name.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase) ||
+                        s.AliasesJson.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase));
+                    if (supplier is not null)
+                    {
+                        document.SupplierId = supplier.Id;
+                    }
+                }
+            }
+            else
+            {
+                // Fallback to generic parser
+                var strategy = cls.type switch
+                {
+                    DocumentType.Invoice when text.Contains("A.0900") => "CodeFirstInvoiceStrategy",
+                    DocumentType.Invoice => "GenericInvoiceTableStrategy",
+                    DocumentType.MaterialsList => "GenericMaterialsListTableStrategy",
+                    _ => "UnknownStrategy"
+                };
+                canonical = cls.type == DocumentType.MaterialsList
+                    ? parser.ParseMaterialsJson(text, strategy)
+                    : parser.ParseInvoiceJson(text, strategy);
+            }
+
+            document.Status = DocumentStatus.Parsed;
+            await SaveArtifact(document.Id, JsonSerializer.Serialize(new { textLength = text.Length, head = text[..Math.Min(500, text.Length)] }), canonical, cancellationToken);
+
+            if (cls.type == DocumentType.Invoice)
+            {
+                await matchingEngine.MatchInvoiceLinesAsync(document.Id, canonical, cancellationToken);
+
+                var canonicalInvoice = JsonSerializer.Deserialize<CanonicalInvoice>(canonical, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (canonicalInvoice is not null)
+                {
+                    var validation = invoiceValidator.Validate(canonicalInvoice);
+                    if (validation.IsValid && document.SupplierId is not null)
+                    {
+                        document.Status = DocumentStatus.ReadyToPost;
+                    }
+                    else
+                    {
+                        document.Status = DocumentStatus.NeedsReview;
+                        if (!validation.IsValid)
+                        {
+                            db.AuditEvents.Add(new AuditEvent
+                            {
+                                DocumentId = document.Id,
+                                EventType = "VALIDATION_FAIL",
+                                Message = validation.Reason ?? "Validare esuata"
+                            });
+                        }
+                    }
+                }
+                else
+                {
+                    document.Status = DocumentStatus.ReadyToPost;
+                }
+            }
+            else
+            {
+                document.Status = DocumentStatus.ReadyToPost;
+            }
+            await db.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Processed document {DocumentId}", documentId);
         }
-
-        document.Status = DocumentStatus.Extracted;
-        var cls = classifier.Classify(text);
-        document.DocType = cls.type;
-        document.Confidence = cls.confidence;
-        document.Status = cls.confidence < 0.6m ? DocumentStatus.NeedsReview : DocumentStatus.Classified;
-
-        var suppliers = await db.Suppliers.Where(s => s.Active).ToListAsync(cancellationToken);
-        var supplier = suppliers.FirstOrDefault(s => !string.IsNullOrWhiteSpace(cls.vatNo) && s.VatNo == cls.vatNo)
-                       ?? suppliers.FirstOrDefault(s => cls.supplierName is not null && (s.Name.Contains(cls.supplierName, StringComparison.OrdinalIgnoreCase) || s.AliasesJson.Contains(cls.supplierName, StringComparison.OrdinalIgnoreCase)));
-        if (supplier is not null)
-        {
-            document.SupplierId = supplier.Id;
-        }
-        else
-        {
-            document.Status = DocumentStatus.NeedsReview;
-        }
-
-        var strategy = cls.type switch
-        {
-            DocumentType.Invoice when text.Contains("A.0900") => "CodeFirstInvoiceStrategy",
-            DocumentType.Invoice => "GenericInvoiceTableStrategy",
-            DocumentType.MaterialsList => "GenericMaterialsListTableStrategy",
-            _ => "UnknownStrategy"
-        };
-
-        var canonical = cls.type == DocumentType.MaterialsList ? parser.ParseMaterialsJson(text, strategy) : parser.ParseInvoiceJson(text, strategy);
-        document.Status = DocumentStatus.Parsed;
-
-        await SaveArtifact(document.Id, JsonSerializer.Serialize(new { textLength = text.Length, head = text[..Math.Min(500, text.Length)] }), canonical, cancellationToken);
-
-        if (cls.type == DocumentType.Invoice)
-        {
-            await matchingEngine.MatchInvoiceLinesAsync(document.Id, canonical, cancellationToken);
-        }
-
-        document.Status = DocumentStatus.Validated;
-        await db.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Processed document {DocumentId}", documentId);
     }
 
     private async Task SaveArtifact(Guid documentId, string extractedJson, string canonicalJson, CancellationToken cancellationToken)

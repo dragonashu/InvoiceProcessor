@@ -4,8 +4,7 @@ using InvoiceProcessor.Web.Services.Extraction;
 namespace InvoiceProcessor.Web.Background;
 
 public class DispatcherWorker(
-    IEmailDispatcher dispatcher,
-    IExtractionPipeline pipeline,
+    IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
     ILogger<DispatcherWorker> logger) : BackgroundService
 {
@@ -16,8 +15,19 @@ public class DispatcherWorker(
         {
             try
             {
-                await dispatcher.PollAsync(stoppingToken);
+                using var scope = scopeFactory.CreateScope();
+                var dispatcher = scope.ServiceProvider.GetRequiredService<IEmailDispatcher>();
+                var pipeline = scope.ServiceProvider.GetRequiredService<IExtractionPipeline>();
+
+                var ingested = await dispatcher.PollAsync(stoppingToken);
+                if (ingested > 0)
+                    logger.LogInformation("Ingested {Count} new document(s)", ingested);
+
                 await pipeline.ProcessPendingAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {

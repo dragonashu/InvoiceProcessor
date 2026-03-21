@@ -16,8 +16,76 @@ public class IndexModel(AppDbContext db) : PageModel
     public Guid? SupplierId { get; set; }
 
     public List<PostingJob> Jobs { get; set; } = [];
+    public string? Message { get; set; }
 
-    public async Task OnGetAsync(CancellationToken cancellationToken)
+    public async Task OnGetAsync(string? message, CancellationToken cancellationToken)
+    {
+        Message = message;
+        await LoadJobsAsync(cancellationToken);
+    }
+
+    public async Task<IActionResult> OnPostTestRpaAsync(CancellationToken cancellationToken)
+    {
+        var jobs = await db.PostingJobs
+            .Include(j => j.Document)
+            .Where(j => j.Status == PostingJobStatus.Queued || j.Status == PostingJobStatus.Claimed)
+            .OrderBy(j => j.CreatedAt)
+            .Take(3)
+            .ToListAsync(cancellationToken);
+
+        if (jobs.Count == 0)
+            return RedirectToPage(new { message = "No queued jobs to simulate." });
+
+        var completed = 0;
+        for (var i = 0; i < jobs.Count; i++)
+        {
+            var job = jobs[i];
+            job.ClaimedAt = DateTime.UtcNow;
+            job.CompletedAt = DateTime.UtcNow;
+
+            if (i < 2)
+            {
+                job.Status = PostingJobStatus.Success;
+                job.ErpDocNo = $"WM/2026/{(1000 + i):D6}";
+                job.Document.Status = DocumentStatus.Posted;
+            }
+            else
+            {
+                job.Status = PostingJobStatus.Partial;
+                job.ErrorCategory = "MANUAL";
+                job.ErrorMessage = "Requires manual review - line items mismatch";
+                job.Document.Status = DocumentStatus.NeedsReview;
+            }
+
+            completed++;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        var successCount = Math.Min(2, completed);
+        var manualCount = completed > 2 ? 1 : 0;
+        return RedirectToPage(new { message = $"Test RPA: {completed} job(s) simulated ({successCount} success, {manualCount} manual)." });
+    }
+
+    public async Task<IActionResult> OnPostRemoveJobsAsync(CancellationToken cancellationToken)
+    {
+        var jobs = await db.PostingJobs
+            .Include(j => j.Document)
+            .ToListAsync(cancellationToken);
+
+        foreach (var job in jobs)
+        {
+            // Reset documents back to Validated so they can be resubmitted
+            if (job.Document.Status is DocumentStatus.Posting or DocumentStatus.Posted or DocumentStatus.Failed)
+                job.Document.Status = DocumentStatus.Validated;
+        }
+
+        db.PostingJobs.RemoveRange(jobs);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return RedirectToPage(new { message = $"{jobs.Count} job(s) removed." });
+    }
+
+    private async Task LoadJobsAsync(CancellationToken cancellationToken)
     {
         var query = db.PostingJobs.Include(j => j.Document).ThenInclude(d => d.Supplier).AsQueryable();
         if (Status.HasValue) query = query.Where(j => j.Status == Status);

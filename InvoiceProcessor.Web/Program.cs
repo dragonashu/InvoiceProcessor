@@ -17,11 +17,13 @@ builder.Services.AddRazorPages();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<IOrchestratorClient, UipathOrchestratorClient>();
 
-builder.Services.AddScoped<IEmailDispatcher, ImapEmailDispatcher>();
+builder.Services.AddScoped<IEmailDispatcher, FolderIngestor>();
 builder.Services.AddScoped<IFileStorage, FileStorage>();
 builder.Services.AddScoped<IDocumentClassifier, RuleBasedDocumentClassifier>();
 builder.Services.AddScoped<ICanonicalParser, StrategyCanonicalParser>();
 builder.Services.AddScoped<IMatchingEngine, MatchingEngine>();
+builder.Services.AddScoped<IInvoiceValidator, InvoiceValidator>();
+builder.Services.AddScoped<ISupplierInvoiceExtractor, CortizoInvoiceExtractor>();
 builder.Services.AddScoped<IExtractionPipeline, PdfExtractionPipeline>();
 builder.Services.AddScoped<IPostingJobService, PostingJobService>();
 
