@@ -1,0 +1,59 @@
+<Activity mc:Ignorable="sap sap2010 sads" x:Class="GetAvailableJobs"
+  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
+  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
+  xmlns:sads="http://schemas.microsoft.com/netfx/2010/xaml/activities/debugger"
+  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+  xmlns:uwha="clr-namespace:UiPath.Web.Activities;assembly=UiPath.Web.Activities"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <x:Members>
+    <x:Property Name="in_BaseUrl" Type="InArgument(x:String)" />
+    <x:Property Name="in_Status" Type="InArgument(x:String)" />
+    <x:Property Name="in_Limit" Type="InArgument(x:Int32)" />
+    <x:Property Name="out_Jobs" Type="OutArgument(x:String)" />
+    <x:Property Name="out_StatusCode" Type="OutArgument(x:Int32)" />
+  </x:Members>
+  <Sequence DisplayName="Get Available Jobs" sap2010:WorkflowViewState.IdRef="Sequence_1">
+    <Sequence.Variables>
+      <Variable x:TypeArguments="x:String" Name="requestUrl" />
+      <Variable x:TypeArguments="x:String" Name="responseBody" />
+      <Variable x:TypeArguments="x:Int32" Name="statusCode" />
+    </Sequence.Variables>
+    <Assign DisplayName="Build URL">
+      <Assign.To>
+        <OutArgument x:TypeArguments="x:String">[requestUrl]</OutArgument>
+      </Assign.To>
+      <Assign.Value>
+        <InArgument x:TypeArguments="x:String">[in_BaseUrl &amp; "/robot/jobs?status=" &amp; If(String.IsNullOrEmpty(in_Status), "Queued", in_Status) &amp; "&amp;limit=" &amp; If(in_Limit = 0, 50, in_Limit).ToString()]</InArgument>
+      </Assign.Value>
+    </Assign>
+    <uwha:HttpClient DisplayName="HTTP GET Available Jobs"
+      Method="GET"
+      EndPoint="[requestUrl]"
+      TimeoutMS="30000">
+      <uwha:HttpClient.Result>
+        <OutArgument x:TypeArguments="x:String">[responseBody]</OutArgument>
+      </uwha:HttpClient.Result>
+      <uwha:HttpClient.StatusCode>
+        <OutArgument x:TypeArguments="x:Int32">[statusCode]</OutArgument>
+      </uwha:HttpClient.StatusCode>
+    </uwha:HttpClient>
+    <Assign DisplayName="Set Output - Jobs JSON">
+      <Assign.To>
+        <OutArgument x:TypeArguments="x:String">[out_Jobs]</OutArgument>
+      </Assign.To>
+      <Assign.Value>
+        <InArgument x:TypeArguments="x:String">[responseBody]</InArgument>
+      </Assign.Value>
+    </Assign>
+    <Assign DisplayName="Set Output - Status Code">
+      <Assign.To>
+        <OutArgument x:TypeArguments="x:Int32">[out_StatusCode]</OutArgument>
+      </Assign.To>
+      <Assign.Value>
+        <InArgument x:TypeArguments="x:Int32">[statusCode]</InArgument>
+      </Assign.Value>
+    </Assign>
+  </Sequence>
+</Activity>

@@ -1,0 +1,91 @@
+<Activity mc:Ignorable="sap sap2010 sads" x:Class="ClaimNextJob"
+  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
+  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
+  xmlns:sads="http://schemas.microsoft.com/netfx/2010/xaml/activities/debugger"
+  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+  xmlns:uwha="clr-namespace:UiPath.Web.Activities;assembly=UiPath.Web.Activities"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <x:Members>
+    <x:Property Name="in_BaseUrl" Type="InArgument(x:String)" />
+    <x:Property Name="out_JobPayload" Type="OutArgument(x:String)" />
+    <x:Property Name="out_PostingJobId" Type="OutArgument(x:String)" />
+    <x:Property Name="out_DocumentId" Type="OutArgument(x:String)" />
+    <x:Property Name="out_HasJob" Type="OutArgument(x:Boolean)" />
+    <x:Property Name="out_StatusCode" Type="OutArgument(x:Int32)" />
+  </x:Members>
+  <Sequence DisplayName="Claim Next Job" sap2010:WorkflowViewState.IdRef="Sequence_1">
+    <Sequence.Variables>
+      <Variable x:TypeArguments="x:String" Name="responseBody" />
+      <Variable x:TypeArguments="x:Int32" Name="statusCode" />
+    </Sequence.Variables>
+    <uwha:HttpClient DisplayName="HTTP GET Claim Next Job"
+      Method="GET"
+      EndPoint="[in_BaseUrl &amp; &quot;/robot/jobs/next&quot;]"
+      TimeoutMS="30000">
+      <uwha:HttpClient.Result>
+        <OutArgument x:TypeArguments="x:String">[responseBody]</OutArgument>
+      </uwha:HttpClient.Result>
+      <uwha:HttpClient.StatusCode>
+        <OutArgument x:TypeArguments="x:Int32">[statusCode]</OutArgument>
+      </uwha:HttpClient.StatusCode>
+    </uwha:HttpClient>
+    <Assign DisplayName="Set Status Code">
+      <Assign.To>
+        <OutArgument x:TypeArguments="x:Int32">[out_StatusCode]</OutArgument>
+      </Assign.To>
+      <Assign.Value>
+        <InArgument x:TypeArguments="x:Int32">[statusCode]</InArgument>
+      </Assign.Value>
+    </Assign>
+    <If DisplayName="Has Job?" Condition="[statusCode = 200 AndAlso Not String.IsNullOrEmpty(responseBody)]">
+      <If.Then>
+        <Sequence DisplayName="Parse Claimed Job">
+          <Assign DisplayName="Set HasJob = True">
+            <Assign.To>
+              <OutArgument x:TypeArguments="x:Boolean">[out_HasJob]</OutArgument>
+            </Assign.To>
+            <Assign.Value>
+              <InArgument x:TypeArguments="x:Boolean">[True]</InArgument>
+            </Assign.Value>
+          </Assign>
+          <Assign DisplayName="Set Full Payload">
+            <Assign.To>
+              <OutArgument x:TypeArguments="x:String">[out_JobPayload]</OutArgument>
+            </Assign.To>
+            <Assign.Value>
+              <InArgument x:TypeArguments="x:String">[responseBody]</InArgument>
+            </Assign.Value>
+          </Assign>
+          <Assign DisplayName="Extract PostingJobId">
+            <Assign.To>
+              <OutArgument x:TypeArguments="x:String">[out_PostingJobId]</OutArgument>
+            </Assign.To>
+            <Assign.Value>
+              <InArgument x:TypeArguments="x:String">[Newtonsoft.Json.Linq.JObject.Parse(responseBody).Value(Of String)("PostingJobId")]</InArgument>
+            </Assign.Value>
+          </Assign>
+          <Assign DisplayName="Extract DocumentId">
+            <Assign.To>
+              <OutArgument x:TypeArguments="x:String">[out_DocumentId]</OutArgument>
+            </Assign.To>
+            <Assign.Value>
+              <InArgument x:TypeArguments="x:String">[Newtonsoft.Json.Linq.JObject.Parse(responseBody).Value(Of String)("DocumentId")]</InArgument>
+            </Assign.Value>
+          </Assign>
+        </Sequence>
+      </If.Then>
+      <If.Else>
+        <Assign DisplayName="Set HasJob = False">
+          <Assign.To>
+            <OutArgument x:TypeArguments="x:Boolean">[out_HasJob]</OutArgument>
+          </Assign.To>
+          <Assign.Value>
+            <InArgument x:TypeArguments="x:Boolean">[False]</InArgument>
+          </Assign.Value>
+        </Assign>
+      </If.Else>
+    </If>
+  </Sequence>
+</Activity>

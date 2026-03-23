@@ -42,7 +42,7 @@
       "privateWorkflows": []
     }
   },
-  "expressionLanguage": "VisualBasic",
+  "expressionLanguage": "VB",
   "isTemplate": false,
   "templateProjectData": {},
   "publishData": {}

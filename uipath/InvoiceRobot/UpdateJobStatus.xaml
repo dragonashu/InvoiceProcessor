@@ -1,0 +1,100 @@
+<Activity mc:Ignorable="sap sap2010 sads" x:Class="UpdateJobStatus"
+  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
+  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
+  xmlns:sads="http://schemas.microsoft.com/netfx/2010/xaml/activities/debugger"
+  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+  xmlns:uwha="clr-namespace:UiPath.Web.Activities;assembly=UiPath.Web.Activities"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <x:Members>
+    <x:Property Name="in_BaseUrl" Type="InArgument(x:String)" />
+    <x:Property Name="in_JobId" Type="InArgument(x:String)" />
+    <x:Property Name="in_Status" Type="InArgument(x:String)" />
+    <x:Property Name="in_ErpDocNo" Type="InArgument(x:String)" />
+    <x:Property Name="in_ErrorCategory" Type="InArgument(x:String)" />
+    <x:Property Name="in_ErrorMessage" Type="InArgument(x:String)" />
+    <x:Property Name="in_ResultJson" Type="InArgument(x:String)" />
+    <x:Property Name="out_StatusCode" Type="OutArgument(x:Int32)" />
+    <x:Property Name="out_Response" Type="OutArgument(x:String)" />
+  </x:Members>
+  <Sequence DisplayName="Update Job Status (PATCH)" sap2010:WorkflowViewState.IdRef="Sequence_1">
+    <Sequence.Variables>
+      <Variable x:TypeArguments="x:String" Name="requestBody" />
+      <Variable x:TypeArguments="x:String" Name="responseBody" />
+      <Variable x:TypeArguments="x:Int32" Name="statusCode" />
+      <Variable x:TypeArguments="x:String" Name="jsonParts" Default="[&quot;&quot;]" />
+    </Sequence.Variables>
+    <!-- Build JSON by concatenating non-empty fields -->
+    <If DisplayName="Add Status?" Condition="[Not String.IsNullOrEmpty(in_Status)]">
+      <If.Then>
+        <Assign DisplayName="Append Status">
+          <Assign.To><OutArgument x:TypeArguments="x:String">[jsonParts]</OutArgument></Assign.To>
+          <Assign.Value><InArgument x:TypeArguments="x:String">[jsonParts &amp; If(jsonParts.Length > 0, &quot;,&quot;, &quot;&quot;) &amp; &quot;&quot;&quot;Status&quot;&quot;:&quot;&quot;&quot; &amp; in_Status &amp; &quot;&quot;&quot;&quot;]</InArgument></Assign.Value>
+        </Assign>
+      </If.Then>
+      <If.Else><Sequence /></If.Else>
+    </If>
+    <If DisplayName="Add ErpDocNo?" Condition="[Not String.IsNullOrEmpty(in_ErpDocNo)]">
+      <If.Then>
+        <Assign DisplayName="Append ErpDocNo">
+          <Assign.To><OutArgument x:TypeArguments="x:String">[jsonParts]</OutArgument></Assign.To>
+          <Assign.Value><InArgument x:TypeArguments="x:String">[jsonParts &amp; If(jsonParts.Length > 0, &quot;,&quot;, &quot;&quot;) &amp; &quot;&quot;&quot;ErpDocNo&quot;&quot;:&quot;&quot;&quot; &amp; in_ErpDocNo &amp; &quot;&quot;&quot;&quot;]</InArgument></Assign.Value>
+        </Assign>
+      </If.Then>
+      <If.Else><Sequence /></If.Else>
+    </If>
+    <If DisplayName="Add ErrorCategory?" Condition="[Not String.IsNullOrEmpty(in_ErrorCategory)]">
+      <If.Then>
+        <Assign DisplayName="Append ErrorCategory">
+          <Assign.To><OutArgument x:TypeArguments="x:String">[jsonParts]</OutArgument></Assign.To>
+          <Assign.Value><InArgument x:TypeArguments="x:String">[jsonParts &amp; If(jsonParts.Length > 0, &quot;,&quot;, &quot;&quot;) &amp; &quot;&quot;&quot;ErrorCategory&quot;&quot;:&quot;&quot;&quot; &amp; in_ErrorCategory &amp; &quot;&quot;&quot;&quot;]</InArgument></Assign.Value>
+        </Assign>
+      </If.Then>
+      <If.Else><Sequence /></If.Else>
+    </If>
+    <If DisplayName="Add ErrorMessage?" Condition="[Not String.IsNullOrEmpty(in_ErrorMessage)]">
+      <If.Then>
+        <Assign DisplayName="Append ErrorMessage">
+          <Assign.To><OutArgument x:TypeArguments="x:String">[jsonParts]</OutArgument></Assign.To>
+          <Assign.Value><InArgument x:TypeArguments="x:String">[jsonParts &amp; If(jsonParts.Length > 0, &quot;,&quot;, &quot;&quot;) &amp; &quot;&quot;&quot;ErrorMessage&quot;&quot;:&quot;&quot;&quot; &amp; in_ErrorMessage &amp; &quot;&quot;&quot;&quot;]</InArgument></Assign.Value>
+        </Assign>
+      </If.Then>
+      <If.Else><Sequence /></If.Else>
+    </If>
+    <If DisplayName="Add ResultJson?" Condition="[Not String.IsNullOrEmpty(in_ResultJson)]">
+      <If.Then>
+        <Assign DisplayName="Append ResultJson">
+          <Assign.To><OutArgument x:TypeArguments="x:String">[jsonParts]</OutArgument></Assign.To>
+          <Assign.Value><InArgument x:TypeArguments="x:String">[jsonParts &amp; If(jsonParts.Length > 0, &quot;,&quot;, &quot;&quot;) &amp; &quot;&quot;&quot;ResultJson&quot;&quot;:&quot;&quot;&quot; &amp; in_ResultJson &amp; &quot;&quot;&quot;&quot;]</InArgument></Assign.Value>
+        </Assign>
+      </If.Then>
+      <If.Else><Sequence /></If.Else>
+    </If>
+    <Assign DisplayName="Wrap as JSON object">
+      <Assign.To><OutArgument x:TypeArguments="x:String">[requestBody]</OutArgument></Assign.To>
+      <Assign.Value><InArgument x:TypeArguments="x:String">[&quot;{&quot; &amp; jsonParts &amp; &quot;}&quot;]</InArgument></Assign.Value>
+    </Assign>
+    <uwha:HttpClient DisplayName="HTTP PATCH Update Job"
+      Method="PATCH"
+      EndPoint="[in_BaseUrl &amp; &quot;/robot/jobs/&quot; &amp; in_JobId]"
+      Body="[requestBody]"
+      BodyFormat="application/json"
+      TimeoutMS="30000">
+      <uwha:HttpClient.Result>
+        <OutArgument x:TypeArguments="x:String">[responseBody]</OutArgument>
+      </uwha:HttpClient.Result>
+      <uwha:HttpClient.StatusCode>
+        <OutArgument x:TypeArguments="x:Int32">[statusCode]</OutArgument>
+      </uwha:HttpClient.StatusCode>
+    </uwha:HttpClient>
+    <Assign DisplayName="Set Output - Response">
+      <Assign.To><OutArgument x:TypeArguments="x:String">[out_Response]</OutArgument></Assign.To>
+      <Assign.Value><InArgument x:TypeArguments="x:String">[responseBody]</InArgument></Assign.Value>
+    </Assign>
+    <Assign DisplayName="Set Output - Status Code">
+      <Assign.To><OutArgument x:TypeArguments="x:Int32">[out_StatusCode]</OutArgument></Assign.To>
+      <Assign.Value><InArgument x:TypeArguments="x:Int32">[statusCode]</InArgument></Assign.Value>
+    </Assign>
+  </Sequence>
+</Activity>
