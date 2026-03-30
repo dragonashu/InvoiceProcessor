@@ -31,7 +31,7 @@ public class RobotController(IPostingJobService postingJobService) : ControllerB
             j.ErrorCategory,
             j.ErrorMessage,
             DocumentCorrelationId = j.Document?.CorrelationId,
-            DocumentSupplier = j.Document?.Supplier
+            DocumentSupplier = j.Document?.Supplier?.DisplayName
         }));
     }
 

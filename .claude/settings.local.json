@@ -7,7 +7,16 @@
       "Bash(nuget search:*)",
       "Bash(dotnet build:*)",
       "Bash(tasklist:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(dotnet publish:*)",
+      "Bash(dotnet ef:*)",
+      "Bash(mkdir -p C:/it/InvoiceProcessor/tools)",
+      "Bash(dotnet new:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet tool:*)",
+      "Bash(taskkill //F //IM dotnet.exe)",
+      "Bash(sqlite3 InvoiceProcessor.Web/Data/invoice-processor.db \":*)",
+      "Bash(taskkill //F //IM InvoiceProcessor.Web.exe)"
     ]
   }
 }

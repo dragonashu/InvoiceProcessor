@@ -37,6 +37,7 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
         // Load all documents in actionable statuses, grouped by supplier
         var documents = await db.Documents
             .Include(d => d.Supplier)
+            .Include(d => d.InvoiceLines)
             .Where(d => ActionableStatuses.Contains(d.Status))
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -50,7 +51,7 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
                 return new SupplierGroup
                 {
                     SupplierId = g.Key,
-                    SupplierName = supplier?.Name ?? "Unknown Supplier",
+                    SupplierName = supplier?.DisplayName ?? "Unknown Supplier",
                     SupplierVat = supplier?.VatNo,
                     Documents = g.ToList(),
                     TotalCount = g.Count(),
@@ -83,6 +84,14 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
 
     public static bool IsSelectable(Document doc) =>
         doc.DocType == DocumentType.Invoice && SelectableStatuses.Contains(doc.Status);
+
+    public static (int matched, int total) GetMatchStats(Document doc)
+    {
+        var lines = doc.InvoiceLines;
+        if (lines.Count == 0) return (0, 0);
+        var matched = lines.Count(l => l.MatchedItemId.HasValue && l.MatchConfidence >= 0.60m);
+        return (matched, lines.Count);
+    }
 
     public static string StatusCssClass(DocumentStatus status) => status switch
     {

@@ -9,17 +9,43 @@
     .edit-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; height: calc(100vh - 140px); }
     .edit-panel { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg); overflow-y: auto; padding: 24px; box-shadow: var(--shadow); }
     .edit-lines-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .edit-lines-table th { text-align: left; padding: 6px 6px; font-size: 11px; font-weight: 600; color: var(--c-text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--c-border); }
-    .edit-lines-table td { padding: 4px 4px; }
-    .edit-lines-table input { width: 100%; }
+    .edit-lines-table th { text-align: left; padding: 6px 4px; font-size: 11px; font-weight: 600; color: var(--c-text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--c-border); }
+    .edit-lines-table td { padding: 4px 3px; }
+    .edit-lines-table input, .edit-lines-table select { width: 100%; }
     .btn-icon { padding: 6px 8px; border: none; background: none; cursor: pointer; color: var(--c-danger); font-size: 16px; border-radius: 4px; }
     .btn-icon:hover { background: var(--c-danger-bg); }
-    .btn-add-line { margin-top: 8px; }
     .edit-validation { padding: 12px 16px; border-radius: var(--radius); margin-top: 16px; font-size: 14px; font-weight: 600; }
     .edit-validation.valid { background: var(--c-success-bg); color: var(--c-success); }
     .edit-validation.invalid { background: var(--c-danger-bg); color: var(--c-danger); }
     .edit-lines-table td.line-ok input { background: #e6f9ed; }
     .edit-lines-table td.line-err input { background: #fde8e8; }
+    .btn-match { padding: 4px; border: 1px solid var(--c-border); background: var(--c-surface); cursor: pointer; border-radius: 4px; color: var(--c-text-muted); flex-shrink: 0; display: flex; align-items: center; }
+    .btn-match:hover { background: var(--c-primary-light); color: var(--c-primary); border-color: var(--c-primary); }
+    .desc-col { display: none; }
+    .show-desc .desc-col { display: table-cell; }
+    .defaults-bar { background: var(--c-neutral-bg); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 12px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .defaults-bar .field-label { font-size: 11px; margin-bottom: 3px; }
+    .filter-dropdown { position: relative; }
+    .filter-dropdown input { padding: 5px 8px; font-size: 12px; border: 1px solid var(--c-border); border-radius: var(--radius); width: 120px; background: var(--c-surface); color: var(--c-text); }
+    .filter-dropdown input:focus { outline: none; border-color: var(--c-primary); }
+    .filter-dropdown .dd-list { display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); max-height: 180px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .filter-dropdown .dd-list.open { display: block; }
+    .filter-dropdown .dd-item { padding: 5px 8px; cursor: pointer; font-size: 12px; border-bottom: 1px solid var(--c-border-light); }
+    .filter-dropdown .dd-item:hover { background: var(--c-primary-light); }
+    .filter-dropdown .dd-item .dd-code { font-weight: 600; font-family: var(--font-mono); }
+    .match-modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center; }
+    .match-modal-overlay.active { display: flex; }
+    .match-modal { background: var(--c-surface); border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgba(0,0,0,0.3); width: 560px; max-height: 80vh; display: flex; flex-direction: column; }
+    .match-modal-header { padding: 16px 20px; border-bottom: 1px solid var(--c-border); }
+    .match-modal-header h3 { font-size: 15px; margin-bottom: 4px; }
+    .match-modal-desc { font-size: 13px; color: var(--c-text-secondary); background: var(--c-neutral-bg); padding: 6px 10px; border-radius: var(--radius); margin-top: 8px; font-family: var(--font-mono); }
+    .match-modal-search { padding: 12px 20px; border-bottom: 1px solid var(--c-border); }
+    .match-modal-results { overflow-y: auto; flex: 1; max-height: 400px; }
+    .match-result-item { padding: 10px 20px; cursor: pointer; border-bottom: 1px solid var(--c-border-light); transition: background 0.1s; }
+    .match-result-item:hover { background: var(--c-primary-light); }
+    .match-result-code { font-family: var(--font-mono); font-size: 12px; color: var(--c-text-muted); }
+    .match-result-name { font-size: 13px; font-weight: 600; }
+    .match-modal-footer { padding: 12px 20px; border-top: 1px solid var(--c-border); text-align: right; }
 </style>
 
 <div class="preview-topbar">
@@ -44,149 +70,153 @@
         <div class="edit-panel">
             <div class="section-title">Detalii factura</div>
             <div class="field-grid">
-                <div class="field">
-                    <div class="field-label">Furnizor</div>
-                    <input type="text" name="Supplier" value="@Model.Supplier" class="form-input" />
-                </div>
-                <div class="field">
-                    <div class="field-label">Nr. factura</div>
-                    <input type="text" name="InvoiceNo" value="@Model.InvoiceNo" class="form-input" />
-                </div>
-                <div class="field">
-                    <div class="field-label">Data</div>
-                    <input type="date" name="InvoiceDate" value="@Model.InvoiceDate" class="form-input" />
-                </div>
-                <div class="field">
-                    <div class="field-label">Moneda</div>
-                    <input type="text" name="Currency" value="@Model.Currency" class="form-input" />
-                </div>
-                <div class="field">
-                    <div class="field-label">Total net</div>
-                    <input type="number" step="0.01" name="NetTotal" value="@Model.NetTotal" class="form-input form-input-num" id="netTotalInput" />
-                </div>
-                <div class="field">
-                    <div class="field-label">TVA</div>
-                    <input type="number" step="0.01" name="VatTotal" value="@Model.VatTotal" class="form-input form-input-num" />
-                </div>
-                <div class="field">
-                    <div class="field-label">Total brut</div>
-                    <input type="number" step="0.01" name="GrossTotal" value="@Model.GrossTotal" class="form-input form-input-num" id="grossTotalInput" />
-                </div>
-                <div class="field">
-                    <div class="field-label">Stare</div>
-                    <div class="field-value"><span class="badge @IndexModel.StatusCssClass(Model.Doc.Status)">@IndexModel.StatusDisplayName(Model.Doc.Status)</span></div>
-                </div>
+                <div class="field"><div class="field-label">Furnizor</div><input type="text" name="Supplier" value="@Model.Supplier" class="form-input" /></div>
+                <div class="field"><div class="field-label">Nr. factura</div><input type="text" name="InvoiceNo" value="@Model.InvoiceNo" class="form-input" /></div>
+                <div class="field"><div class="field-label">Data</div><input type="date" name="InvoiceDate" value="@Model.InvoiceDate" class="form-input" /></div>
+                <div class="field"><div class="field-label">Moneda</div><input type="text" name="Currency" value="@Model.Currency" class="form-input" /></div>
+                <div class="field"><div class="field-label">Total net</div><input type="number" step="0.01" name="NetTotal" value="@Model.NetTotal" class="form-input form-input-num" id="netTotalInput" /></div>
+                <div class="field"><div class="field-label">Total brut</div><input type="number" step="0.01" name="GrossTotal" value="@Model.GrossTotal" class="form-input form-input-num" id="grossTotalInput" /></div>
             </div>
 
-            <div class="section-title">Linii factura</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                <div class="section-title" style="margin: 0;">Linii factura</div>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="toggleDesc" /> Afiseaza descrieri
+                </label>
+            </div>
+
+            <div class="defaults-bar">
+                <div>
+                    <div class="field-label">Gestiune implicita</div>
+                    <div class="filter-dropdown">
+                        <input type="text" id="defaultWarehouse" placeholder="Cauta gestiune..." autocomplete="off" />
+                        <div class="dd-list" id="defaultWarehouseList"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="field-label">Centru cost implicit</div>
+                    <div class="filter-dropdown">
+                        <input type="text" id="defaultCostCenter" placeholder="Cauta centru cost..." autocomplete="off" />
+                        <div class="dd-list" id="defaultCostCenterList"></div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary" style="padding: 5px 12px; font-size: 12px;" id="applyDefaultsBtn">Aplica pe toate liniile</button>
+            </div>
+
             <table class="edit-lines-table" id="linesTable">
                 <thead>
                     <tr>
-                        <th style="width:70px;">Cod</th>
-                        <th>Descriere</th>
-                        <th style="width:55px;">Bare</th>
-                        <th style="width:65px;">Cant.</th>
-                        <th style="width:50px;">UM</th>
-                        <th style="width:80px;">Pret</th>
-                        <th style="width:80px;">Total</th>
-                        <th style="width:30px;"></th>
+                        <th style="width:80px;">Cod PDF</th>
+                        <th class="desc-col">Descriere PDF</th>
+                        <th>Articol ERP</th>
+                        <th class="desc-col">Descriere ERP</th>
+                        <th style="width:55px;">Cant.</th>
+                        <th style="width:45px;">UM</th>
+                        <th style="width:70px;">Total</th>
+                        <th style="width:85px;">Gestiune</th>
+                        <th style="width:85px;">C. Cost</th>
+                        <th style="width:25px;"></th>
                     </tr>
                 </thead>
                 <tbody id="linesBody">
                     @for (var i = 0; i < Model.Lines.Count; i++)
                     {
+                        Model.MatchedLines.TryGetValue(i + 1, out var matchedLine);
+                        var matchItem = matchedLine?.MatchedItem;
+                        var hasMatch = matchItem is not null;
+                        var matchConf = matchedLine?.MatchConfidence ?? 0m;
+                        var matchCss = matchConf >= 0.85m ? "color: var(--c-success); font-weight:600;" : matchConf >= 0.60m ? "color: var(--c-primary); font-weight:600;" : "color: var(--c-text-muted);";
                         <tr>
-                            <td><input type="text" name="Lines[@i].VendorItemCode" value="@Model.Lines[i].VendorItemCode" class="form-input form-input-sm" /></td>
-                            <td><input type="text" name="Lines[@i].DescriptionRaw" value="@Model.Lines[i].DescriptionRaw" class="form-input form-input-sm" /></td>
-                            <td><input type="text" name="Lines[@i].Bare" value="@Model.Lines[i].Bare" class="form-input form-input-sm" /></td>
+                            <td>
+                                <input type="text" name="Lines[@i].VendorItemCode" value="@Model.Lines[i].VendorItemCode" class="form-input form-input-sm" style="font-family:var(--font-mono); font-size:11px;" />
+                                <input type="hidden" name="Lines[@i].DescriptionRaw" value="@Model.Lines[i].DescriptionRaw" />
+                                <input type="hidden" name="Lines[@i].Bare" value="@Model.Lines[i].Bare" />
+                                <input type="hidden" name="Lines[@i].UnitPrice" value="@Model.Lines[i].UnitPrice" />
+                            </td>
+                            <td class="desc-col"><span style="font-size:11px;">@Model.Lines[i].DescriptionRaw</span></td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 3px;">
+                                    <span class="erp-match-label" id="erpLabel_@i" style="font-size:11px; font-family:var(--font-mono); @matchCss flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                                          title="@(hasMatch ? $"{matchItem!.ErpItemCode} — {matchItem.Name}" : "Neasociat")">
+                                        @(hasMatch ? matchItem!.ErpItemCode : "-")
+                                    </span>
+                                    <button type="button" class="btn-match" title="Asociaza articol ERP"
+                                            data-line="@i" data-desc="@Model.Lines[i].DescriptionRaw"
+                                            data-vendor="@Model.Lines[i].VendorItemCode"
+                                            data-lineid="@matchedLine?.Id" data-supplierid="@Model.Doc.SupplierId">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="desc-col"><span style="font-size:11px; @matchCss">@(hasMatch ? matchItem!.Name : "-")</span></td>
                             <td><input type="number" step="0.01" name="Lines[@i].Qty" value="@Model.Lines[i].Qty" class="form-input form-input-sm form-input-num" /></td>
-                            <td><input type="text" name="Lines[@i].Uom" value="@Model.Lines[i].Uom" class="form-input form-input-sm" /></td>
-                            <td><input type="number" step="0.0001" name="Lines[@i].UnitPrice" value="@Model.Lines[i].UnitPrice" class="form-input form-input-sm form-input-num" /></td>
+                            <td><input type="text" name="Lines[@i].Uom" value="@Model.Lines[i].Uom" class="form-input form-input-sm" style="font-size:11px;" /></td>
                             <td><input type="number" step="0.01" name="Lines[@i].LineTotal" value="@Model.Lines[i].LineTotal" class="form-input form-input-sm form-input-num line-total" /></td>
+                            <td>
+                                <div class="filter-dropdown">
+                                    <input type="text" name="Lines[@i].WarehouseCode" value="@Model.Lines[i].WarehouseCode" class="form-input form-input-sm wh-input" placeholder="Gest." autocomplete="off" style="font-size:11px; width:80px;" />
+                                    <div class="dd-list wh-list"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="filter-dropdown">
+                                    <input type="text" name="Lines[@i].CostCenterCode" value="@Model.Lines[i].CostCenterCode" class="form-input form-input-sm cc-input" placeholder="C.Cost" autocomplete="off" style="font-size:11px; width:80px;" />
+                                    <div class="dd-list cc-list"></div>
+                                </div>
+                            </td>
                             <td><button type="button" class="btn-icon remove-line" title="Sterge linia">&times;</button></td>
                         </tr>
                     }
                 </tbody>
             </table>
 
-            <button type="button" class="btn btn-secondary btn-add-line" id="addLineBtn" style="padding: 6px 14px; font-size: 13px;">
-                + Adauga linie
-            </button>
-
             <div class="edit-validation" id="validationBar"></div>
 
             <div class="actions-bar" style="display: flex; gap: 8px; align-items: center;">
-                <button type="submit" name="handler" value="Save" class="btn btn-primary">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                    Salveaza
-                </button>
+                <button type="submit" name="handler" value="Save" class="btn btn-primary">Salveaza</button>
                 <button type="submit" name="handler" value="SendToRobot" class="btn btn-secondary" style="color: var(--c-primary);"
-                        onclick="return confirm('Trimiti factura la robot chiar daca are erori?')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                    Trimite la robot
-                </button>
+                        onclick="return confirm('Trimiti factura la robot?')">Trimite la robot</button>
                 <a href="/Inbox" class="btn btn-secondary">Anuleaza</a>
             </div>
         </div>
     </div>
 </form>
 
+<div class="match-modal-overlay" id="matchModal">
+    <div class="match-modal">
+        <div class="match-modal-header">
+            <h3>Asociaza articol ERP</h3>
+            <div class="match-modal-desc" id="matchModalDesc"></div>
+        </div>
+        <div class="match-modal-search">
+            <input type="text" id="matchSearchInput" class="form-input" placeholder="Cauta in catalog (minim 2 caractere)..." />
+        </div>
+        <div class="match-modal-results" id="matchResults">
+            <div style="padding: 20px; text-align: center; color: var(--c-text-muted); font-size: 13px;">Tasteaza pentru a cauta...</div>
+        </div>
+        <div class="match-modal-footer">
+            <button type="button" class="btn btn-secondary" id="matchModalClose" style="padding: 6px 16px; font-size: 13px;">Inchide</button>
+        </div>
+    </div>
+</div>
+
 <script>
-    // Remove line
-    document.getElementById('linesBody').addEventListener('click', function (e) {
-        if (e.target.classList.contains('remove-line')) {
-            e.target.closest('tr').remove();
-            reindex();
-            updateValidation();
-        }
+    // Toggle descriptions
+    document.getElementById('toggleDesc').addEventListener('change', function () {
+        document.getElementById('linesTable').classList.toggle('show-desc', this.checked);
     });
 
-    // Add line
-    document.getElementById('addLineBtn').addEventListener('click', function () {
-        var tbody = document.getElementById('linesBody');
-        var idx = tbody.rows.length;
-        var tr = document.createElement('tr');
-        tr.innerHTML =
-            '<td><input type="text" name="Lines[' + idx + '].VendorItemCode" class="form-input form-input-sm" /></td>' +
-            '<td><input type="text" name="Lines[' + idx + '].DescriptionRaw" class="form-input form-input-sm" /></td>' +
-            '<td><input type="text" name="Lines[' + idx + '].Bare" class="form-input form-input-sm" /></td>' +
-            '<td><input type="number" step="0.01" name="Lines[' + idx + '].Qty" value="0" class="form-input form-input-sm form-input-num" /></td>' +
-            '<td><input type="text" name="Lines[' + idx + '].Uom" value="MTS" class="form-input form-input-sm" /></td>' +
-            '<td><input type="number" step="0.0001" name="Lines[' + idx + '].UnitPrice" value="0" class="form-input form-input-sm form-input-num" /></td>' +
-            '<td><input type="number" step="0.01" name="Lines[' + idx + '].LineTotal" value="0" class="form-input form-input-sm form-input-num line-total" /></td>' +
-            '<td><button type="button" class="btn-icon remove-line" title="Sterge linia">&times;</button></td>';
-        tbody.appendChild(tr);
-        updateValidation();
+    // Remove line
+    document.getElementById('linesBody').addEventListener('click', function (e) {
+        if (e.target.classList.contains('remove-line')) { e.target.closest('tr').remove(); reindex(); updateValidation(); }
     });
 
     function reindex() {
         var rows = document.getElementById('linesBody').rows;
         for (var i = 0; i < rows.length; i++) {
-            var inputs = rows[i].querySelectorAll('input');
-            inputs.forEach(function (inp) {
-                inp.name = inp.name.replace(/Lines\[\d+\]/, 'Lines[' + i + ']');
+            rows[i].querySelectorAll('input,select').forEach(function (inp) {
+                if (inp.name) inp.name = inp.name.replace(/Lines\[\d+\]/, 'Lines[' + i + ']');
             });
-        }
-    }
-
-    function updateLineValidation() {
-        var rows = document.getElementById('linesBody').rows;
-        for (var i = 0; i < rows.length; i++) {
-            var inputs = rows[i].querySelectorAll('input');
-            var qty = parseFloat(inputs[3].value) || 0;
-            var price = parseFloat(inputs[5].value);
-            var total = parseFloat(inputs[6].value) || 0;
-            var totalTd = inputs[6].closest('td');
-            if (!isNaN(price) && price !== 0) {
-                var expected = qty * price;
-                if (Math.abs(expected - total) <= 0.02) {
-                    totalTd.className = 'line-ok';
-                } else {
-                    totalTd.className = 'line-err';
-                }
-            } else {
-                totalTd.className = '';
-            }
         }
     }
 
@@ -201,23 +231,98 @@
         var diff = Math.abs(sum - compareVal);
         var tolerance = Math.max(compareVal * 0.01, 0.50);
         var bar = document.getElementById('validationBar');
-        if (compareVal === 0) {
-            bar.className = 'edit-validation invalid';
-            bar.textContent = 'Total lipseste';
-        } else if (diff <= tolerance) {
-            bar.className = 'edit-validation valid';
-            bar.textContent = '\u2713 Suma linii (' + sum.toFixed(2) + ') = ' + compareLabel + ' (' + compareVal.toFixed(2) + ')';
-        } else {
-            bar.className = 'edit-validation invalid';
-            bar.textContent = '\u2717 Suma linii (' + sum.toFixed(2) + ') \u2260 ' + compareLabel + ' (' + compareVal.toFixed(2) + ') — diferenta: ' + diff.toFixed(2);
-        }
-        updateLineValidation();
+        if (compareVal === 0) { bar.className = 'edit-validation invalid'; bar.textContent = 'Total lipseste'; }
+        else if (diff <= tolerance) { bar.className = 'edit-validation valid'; bar.textContent = '\u2713 Suma linii (' + sum.toFixed(2) + ') = ' + compareLabel + ' (' + compareVal.toFixed(2) + ')'; }
+        else { bar.className = 'edit-validation invalid'; bar.textContent = '\u2717 Suma linii (' + sum.toFixed(2) + ') \u2260 ' + compareLabel + ' (' + compareVal.toFixed(2) + ') — dif: ' + diff.toFixed(2); }
     }
 
-    // Live validation on any input change in the edit panel
-    document.querySelector('.edit-panel').addEventListener('input', function () {
-        updateValidation();
+    document.querySelector('.edit-panel').addEventListener('input', updateValidation);
+    updateValidation();
+
+    // --- Filtered dropdown logic ---
+    var ddTimeout = {};
+    function setupFilteredDropdown(inputEl, listEl, apiUrl) {
+        inputEl.addEventListener('input', function () {
+            var q = inputEl.value.trim();
+            clearTimeout(ddTimeout[apiUrl]);
+            if (q.length < 2) { listEl.classList.remove('open'); return; }
+            ddTimeout[apiUrl] = setTimeout(function () {
+                fetch(apiUrl + '?q=' + encodeURIComponent(q))
+                    .then(function (r) { return r.json(); })
+                    .then(function (items) {
+                        if (items.length === 0) { listEl.innerHTML = '<div class="dd-item" style="color:var(--c-text-muted);">Niciun rezultat</div>'; }
+                        else { listEl.innerHTML = items.map(function (it) { return '<div class="dd-item" data-code="' + it.code + '"><span class="dd-code">' + it.code + '</span> ' + it.name + '</div>'; }).join(''); }
+                        listEl.classList.add('open');
+                        listEl.querySelectorAll('.dd-item[data-code]').forEach(function (el) {
+                            el.addEventListener('mousedown', function (e) { e.preventDefault(); inputEl.value = el.dataset.code; listEl.classList.remove('open'); inputEl.dispatchEvent(new Event('input', { bubbles: true })); });
+                        });
+                    });
+            }, 250);
+        });
+        inputEl.addEventListener('blur', function () { setTimeout(function () { listEl.classList.remove('open'); }, 200); });
+        inputEl.addEventListener('focus', function () { if (inputEl.value.length >= 2) inputEl.dispatchEvent(new Event('input')); });
+    }
+
+    // Default dropdowns
+    setupFilteredDropdown(document.getElementById('defaultWarehouse'), document.getElementById('defaultWarehouseList'), '/ui/warehouses');
+    setupFilteredDropdown(document.getElementById('defaultCostCenter'), document.getElementById('defaultCostCenterList'), '/ui/cost-centers');
+
+    // Per-line dropdowns
+    document.querySelectorAll('.wh-input').forEach(function (inp) { setupFilteredDropdown(inp, inp.parentElement.querySelector('.wh-list'), '/ui/warehouses'); });
+    document.querySelectorAll('.cc-input').forEach(function (inp) { setupFilteredDropdown(inp, inp.parentElement.querySelector('.cc-list'), '/ui/cost-centers'); });
+
+    // Apply defaults button
+    document.getElementById('applyDefaultsBtn').addEventListener('click', function () {
+        var wh = document.getElementById('defaultWarehouse').value;
+        var cc = document.getElementById('defaultCostCenter').value;
+        if (wh) document.querySelectorAll('.wh-input').forEach(function (inp) { inp.value = wh; });
+        if (cc) document.querySelectorAll('.cc-input').forEach(function (inp) { inp.value = cc; });
     });
 
-    updateValidation();
+    // --- Match modal ---
+    var matchModal = document.getElementById('matchModal');
+    var matchSearchInput = document.getElementById('matchSearchInput');
+    var matchResults = document.getElementById('matchResults');
+    var currentMatchLine = null;
+    var searchTimeout = null;
+
+    document.querySelectorAll('.btn-match').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            currentMatchLine = { index: btn.dataset.line, desc: btn.dataset.desc, vendor: btn.dataset.vendor, lineId: btn.dataset.lineid, supplierId: btn.dataset.supplierid };
+            document.getElementById('matchModalDesc').textContent = btn.dataset.desc;
+            matchSearchInput.value = '';
+            matchResults.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--c-text-muted); font-size: 13px;">Tasteaza pentru a cauta...</div>';
+            matchModal.classList.add('active');
+            setTimeout(function () { matchSearchInput.focus(); }, 100);
+        });
+    });
+
+    document.getElementById('matchModalClose').addEventListener('click', function () { matchModal.classList.remove('active'); });
+    matchModal.addEventListener('click', function (e) { if (e.target === matchModal) matchModal.classList.remove('active'); });
+
+    matchSearchInput.addEventListener('input', function () {
+        clearTimeout(searchTimeout);
+        var q = matchSearchInput.value.trim();
+        if (q.length < 2) { matchResults.innerHTML = '<div style="padding:20px;text-align:center;color:var(--c-text-muted);font-size:13px;">Minim 2 caractere...</div>'; return; }
+        searchTimeout = setTimeout(function () {
+            fetch('/ui/catalog/search?q=' + encodeURIComponent(q)).then(function (r) { return r.json(); }).then(function (items) {
+                if (items.length === 0) { matchResults.innerHTML = '<div style="padding:20px;text-align:center;color:var(--c-text-muted);">Niciun rezultat.</div>'; return; }
+                matchResults.innerHTML = items.map(function (item) {
+                    return '<div class="match-result-item" data-id="' + item.id + '" data-code="' + item.erpItemCode + '" data-name="' + item.name.replace(/"/g, '&quot;') + '"><div class="match-result-name">' + item.name + '</div><div class="match-result-code">' + item.erpItemCode + (item.uom ? ' · ' + item.uom : '') + '</div></div>';
+                }).join('');
+                matchResults.querySelectorAll('.match-result-item').forEach(function (el) { el.addEventListener('click', function () { selectMatch(el.dataset.id, el.dataset.code, el.dataset.name); }); });
+            });
+        }, 300);
+    });
+
+    function selectMatch(catalogItemId, erpCode, erpName) {
+        var label = document.getElementById('erpLabel_' + currentMatchLine.index);
+        if (label) { label.textContent = erpCode; label.title = erpCode + ' — ' + erpName; label.style.color = 'var(--c-primary)'; label.style.fontWeight = '600'; }
+        if (currentMatchLine.supplierId && currentMatchLine.vendor) {
+            fetch('/ui/catalog/map', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ supplierId: currentMatchLine.supplierId, vendorCode: currentMatchLine.vendor, catalogItemId: catalogItemId, invoiceLineId: currentMatchLine.lineId || null }) });
+        }
+        matchModal.classList.remove('active');
+    }
 </script>

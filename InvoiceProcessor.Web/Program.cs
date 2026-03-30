@@ -10,6 +10,8 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseWindowsService();
+
 builder.Services.Configure<AppOptions>(builder.Configuration.GetSection("App"));
 builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=./data/invoice-processor.db"));
 
@@ -24,6 +26,8 @@ builder.Services.AddScoped<ICanonicalParser, StrategyCanonicalParser>();
 builder.Services.AddScoped<IMatchingEngine, MatchingEngine>();
 builder.Services.AddScoped<IInvoiceValidator, InvoiceValidator>();
 builder.Services.AddScoped<ISupplierInvoiceExtractor, CortizoInvoiceExtractor>();
+builder.Services.AddScoped<ISupplierInvoiceExtractor, AliplastInvoiceExtractor>();
+builder.Services.AddScoped<ISupplierInvoiceExtractor, YildizInvoiceExtractor>();
 builder.Services.AddScoped<IExtractionPipeline, PdfExtractionPipeline>();
 builder.Services.AddScoped<IPostingJobService, PostingJobService>();
 

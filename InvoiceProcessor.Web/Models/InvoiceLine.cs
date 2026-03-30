@@ -16,4 +16,6 @@ public class InvoiceLine
     public CatalogItem? MatchedItem { get; set; }
     public decimal MatchConfidence { get; set; }
     public string? MatchReason { get; set; }
+    public string? WarehouseCode { get; set; }
+    public string? CostCenterCode { get; set; }
 }

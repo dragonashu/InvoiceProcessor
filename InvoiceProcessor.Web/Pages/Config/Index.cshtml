@@ -1,0 +1,228 @@
+@page "/Config"
+@model InvoiceProcessor.Web.Pages.Config.IndexModel
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+    <div class="page-header" style="margin-bottom: 0;">
+        <h1 class="page-title">Configurare</h1>
+        <p class="page-subtitle">Gestionare furnizori si mapare ERP</p>
+    </div>
+    <form method="post">
+        <button type="submit" asp-page-handler="ClearInbox" class="btn btn-secondary" style="color: var(--c-danger);"
+                onclick="return confirm('Esti sigur ca vrei sa stergi toate documentele si joburile din inbox?\n\nFurnizorii si catalogul vor ramane intacte.')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Goleste inbox
+        </button>
+    </form>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-success">@Model.Message</div>
+}
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <div class="card">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;">Furnizori</div>
+            @if (Model.Suppliers.Count == 0)
+            {
+                <div class="empty-state">
+                    <p>Niciun furnizor configurat.</p>
+                </div>
+            }
+            else
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nume detectat</th>
+                            <th>Nume ERP</th>
+                            <th>CUI / VAT</th>
+                            <th>Aliasuri</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model.Suppliers)
+                        {
+                            <tr>
+                                <td>@s.Name</td>
+                                <td style="font-weight: 600; color: var(--c-primary);">@(s.ErpName ?? "-")</td>
+                                <td style="font-family: var(--font-mono); font-size: 13px;">@(s.VatNo ?? "-")</td>
+                                <td style="font-size: 13px;">@IndexModel.ParseAliases(s.AliasesJson)</td>
+                                <td>
+                                    <button type="button" class="btn btn-secondary edit-supplier-btn" style="padding: 4px 12px; font-size: 12px;"
+                                            data-id="@s.Id"
+                                            data-name="@s.Name"
+                                            data-erp="@s.ErpName"
+                                            data-vat="@s.VatNo"
+                                            data-country="@s.Country"
+                                            data-aliases="@IndexModel.ParseAliases(s.AliasesJson)">
+                                        Editeaza
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;" id="formTitle">Adauga furnizor</div>
+            <form method="post">
+                <input type="hidden" name="EditId" id="editId" value="" />
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div>
+                        <label class="field-label">Nume detectat (din PDF)</label>
+                        <input type="text" name="Name" id="nameInput" class="form-input" required placeholder="ex: CORTIZO S.A." />
+                    </div>
+                    <div>
+                        <label class="field-label">Nume ERP</label>
+                        <input type="text" name="ErpName" id="erpNameInput" class="form-input" placeholder="ex: Cortizo SA - furnizor aluminiu" />
+                    </div>
+                    <div>
+                        <label class="field-label">CUI / VAT</label>
+                        <input type="text" name="VatNo" id="vatInput" class="form-input" placeholder="ex: SK2020065685" />
+                    </div>
+                    <div>
+                        <label class="field-label">Tara</label>
+                        <input type="text" name="Country" id="countryInput" class="form-input" placeholder="ex: SK" />
+                    </div>
+                    <div>
+                        <label class="field-label">Aliasuri (separate prin virgula)</label>
+                        <input type="text" name="Aliases" id="aliasesInput" class="form-input" placeholder="ex: CORTIZO, Cortizo SA, ALUMINIOS CORTIZO" />
+                    </div>
+                    <div class="actions-bar" style="border-top: none; padding-top: 0;">
+                        <button type="submit" asp-page-handler="Save" class="btn btn-primary" id="saveBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            <span id="saveBtnText">Adauga</span>
+                        </button>
+                        <button type="submit" asp-page-handler="Delete" class="btn btn-secondary" style="color: var(--c-danger); display: none;" id="deleteBtn"
+                                onclick="return confirm('Dezactivezi acest furnizor?')">
+                            Sterge
+                        </button>
+                        <button type="button" class="btn btn-secondary" style="display: none;" id="cancelBtn">Anuleaza</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px;">
+    <div class="card">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;">Catalog articole ERP</div>
+            <div class="stat-cards" style="grid-template-columns: 1fr 1fr; margin-bottom: 16px;">
+                <div class="stat-card">
+                    <div class="stat-card-label">Articole in catalog</div>
+                    <div class="stat-card-value" style="font-size: 22px;">@Model.CatalogItemCount</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Mapari furnizor-articol</div>
+                    <div class="stat-card-value" style="font-size: 22px;">@Model.MappingCount</div>
+                </div>
+            </div>
+            <form method="post" asp-page-handler="ImportCatalog" enctype="multipart/form-data">
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div>
+                        <label class="field-label">Import / Actualizare catalog (CSV)</label>
+                        <p style="font-size: 12px; color: var(--c-text-muted); margin-bottom: 8px;">
+                            Fisierul trebuie sa contina coloanele <code>CODOBIECT</code> si <code>Denumire obiect</code>. Optional: <code>UM</code>, <code>CotaTVA</code>.<br/>
+                            Articolele existente (dupa CODOBIECT) vor fi actualizate. Articolele noi vor fi adaugate.
+                        </p>
+                        <input type="file" name="CatalogFile" accept=".csv,.txt,.tsv" class="form-input" style="padding: 6px;" />
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" class="btn btn-primary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Importa catalog
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <form method="post" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--c-border-light);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button type="submit" asp-page-handler="Rematch" class="btn btn-secondary" style="color: var(--c-primary);"
+                            onclick="return confirm('Re-asociezi toate documentele cu catalogul curent?\nAceasta operatiune poate dura cateva secunde.')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        Re-asociaza toate documentele
+                    </button>
+                    <span style="font-size: 12px; color: var(--c-text-muted);">Ruleaza matching-ul pe toate documentele existente cu catalogul curent</span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;">Gestiuni si Centre de cost</div>
+            <div class="stat-cards" style="grid-template-columns: 1fr 1fr; margin-bottom: 16px;">
+                <div class="stat-card">
+                    <div class="stat-card-label">Gestiuni</div>
+                    <div class="stat-card-value" style="font-size: 22px;">@Model.WarehouseCount</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Centre de cost</div>
+                    <div class="stat-card-value" style="font-size: 22px;">@Model.CostCenterCount</div>
+                </div>
+            </div>
+            <form method="post" asp-page-handler="ImportWarehouses" enctype="multipart/form-data" style="margin-bottom: 16px;">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label class="field-label">Import gestiuni (CSV: COD, DENUMIRE)</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="file" name="WarehouseFile" accept=".csv,.txt,.tsv" class="form-input" style="padding: 6px;" />
+                        <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Importa gestiuni</button>
+                    </div>
+                </div>
+            </form>
+            <form method="post" asp-page-handler="ImportCostCenters" enctype="multipart/form-data">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label class="field-label">Import centre de cost (CSV: COD, DENUMIRE)</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="file" name="CostCenterFile" accept=".csv,.txt,.tsv" class="form-input" style="padding: 6px;" />
+                        <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Importa centre cost</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-input { padding: 8px 12px; border: 1px solid var(--c-border); border-radius: var(--radius); font-size: 14px; width: 100%; font-family: inherit; background: var(--c-surface); color: var(--c-text); }
+    .form-input:focus { outline: none; border-color: var(--c-primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+</style>
+
+<script>
+    document.querySelectorAll('.edit-supplier-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.getElementById('editId').value = btn.dataset.id;
+            document.getElementById('nameInput').value = btn.dataset.name;
+            document.getElementById('erpNameInput').value = btn.dataset.erp || '';
+            document.getElementById('vatInput').value = btn.dataset.vat || '';
+            document.getElementById('countryInput').value = btn.dataset.country || '';
+            document.getElementById('aliasesInput').value = btn.dataset.aliases || '';
+            document.getElementById('formTitle').textContent = 'Editeaza furnizor';
+            document.getElementById('saveBtnText').textContent = 'Salveaza';
+            document.getElementById('deleteBtn').style.display = '';
+            document.getElementById('cancelBtn').style.display = '';
+        });
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', function () {
+        document.getElementById('editId').value = '';
+        document.getElementById('nameInput').value = '';
+        document.getElementById('erpNameInput').value = '';
+        document.getElementById('vatInput').value = '';
+        document.getElementById('countryInput').value = '';
+        document.getElementById('aliasesInput').value = '';
+        document.getElementById('formTitle').textContent = 'Adauga furnizor';
+        document.getElementById('saveBtnText').textContent = 'Adauga';
+        document.getElementById('deleteBtn').style.display = 'none';
+        document.getElementById('cancelBtn').style.display = 'none';
+    });
+</script>

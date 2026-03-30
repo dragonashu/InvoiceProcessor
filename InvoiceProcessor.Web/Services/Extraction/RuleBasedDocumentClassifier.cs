@@ -32,8 +32,9 @@ public class RuleBasedDocumentClassifier : IDocumentClassifier
         "materiales", "consumidos", "referencia de trabajo",
     ];
 
-    // EU VAT number pattern: 2-letter country code followed by 8-12 alphanumeric characters
-    private static readonly Regex VatPattern = new(@"\b([A-Z]{2}\d{8,12})\b", RegexOptions.Compiled);
+    // EU VAT number pattern: 2-letter country code followed by 8-12 digits,
+    // not preceded or followed by more digits (prevents merging with adjacent numbers)
+    private static readonly Regex VatPattern = new(@"(?<!\d)([A-Z]{2}\d{8,12})(?!\d)", RegexOptions.Compiled);
 
     // "Supplier:" label pattern (English invoices)
     private static readonly Regex SupplierLabelPattern = new(@"Supplier[:\s]+(?<name>.+)", RegexOptions.Compiled);

@@ -18,6 +18,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
 
     public Document Doc { get; set; } = default!;
     public string? Message { get; set; }
+    public Dictionary<int, InvoiceLine> MatchedLines { get; set; } = new();
 
     [BindProperty] public string? Supplier { get; set; }
     [BindProperty] public string? InvoiceNo { get; set; }
@@ -37,17 +38,22 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
         public decimal? UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
         public string? Bare { get; set; }
+        public string? WarehouseCode { get; set; }
+        public string? CostCenterCode { get; set; }
     }
 
     public async Task<IActionResult> OnGetAsync(Guid id, string? message, CancellationToken cancellationToken)
     {
-        var doc = await db.Documents.Include(d => d.Supplier).FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        var doc = await db.Documents.Include(d => d.Supplier)
+            .Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem)
+            .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
         if (doc is null) return NotFound();
 
         if (doc.Status is not (DocumentStatus.NeedsReview or DocumentStatus.Validated or DocumentStatus.ReadyToPost))
             return RedirectToPage("Index", new { message = "Documentul nu poate fi editat in starea curenta." });
 
         Doc = doc;
+        MatchedLines = doc.InvoiceLines.ToDictionary(l => l.LineNo);
         Message = message;
 
         var artifact = await db.ExtractArtifacts.FirstOrDefaultAsync(a => a.DocumentId == id, cancellationToken);
@@ -63,15 +69,23 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
                 NetTotal = inv.NetTotal;
                 VatTotal = inv.VatTotal;
                 GrossTotal = inv.GrossTotal;
-                Lines = inv.Lines.Select(l => new EditLineInput
+                var lineIdx = 0;
+                Lines = inv.Lines.Select(l =>
                 {
-                    VendorItemCode = l.VendorItemCode,
-                    DescriptionRaw = l.DescriptionRaw,
-                    Qty = l.Qty,
-                    Uom = l.Uom,
-                    UnitPrice = l.UnitPrice,
-                    LineTotal = l.LineTotal,
-                    Bare = l.Bare
+                    lineIdx++;
+                    MatchedLines.TryGetValue(lineIdx, out var ml);
+                    return new EditLineInput
+                    {
+                        VendorItemCode = l.VendorItemCode,
+                        DescriptionRaw = l.DescriptionRaw,
+                        Qty = l.Qty,
+                        Uom = l.Uom,
+                        UnitPrice = l.UnitPrice,
+                        LineTotal = l.LineTotal,
+                        Bare = l.Bare,
+                        WarehouseCode = ml?.WarehouseCode,
+                        CostCenterCode = ml?.CostCenterCode
+                    };
                 }).ToList();
             }
         }
@@ -113,6 +127,14 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
 
         // Re-run matching
         await matchingEngine.MatchInvoiceLinesAsync(doc.Id, canonical, cancellationToken);
+
+        // Apply warehouse and cost center codes from form to invoice lines
+        var savedLines = await db.InvoiceLines.Where(l => l.DocumentId == doc.Id).OrderBy(l => l.LineNo).ToListAsync(cancellationToken);
+        for (int i = 0; i < savedLines.Count && i < Lines.Count; i++)
+        {
+            savedLines[i].WarehouseCode = Lines[i].WarehouseCode;
+            savedLines[i].CostCenterCode = Lines[i].CostCenterCode;
+        }
 
         var validation = validator.Validate(updatedInvoice);
 

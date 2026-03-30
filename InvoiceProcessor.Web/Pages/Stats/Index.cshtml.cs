@@ -32,7 +32,7 @@ public class IndexModel(AppDbContext db) : PageModel
 
         var docs = await db.Documents.Include(d => d.Supplier).ToListAsync(ct);
         DocumentsBySupplier = docs
-            .GroupBy(d => d.Supplier?.Name ?? "Necunoscut")
+            .GroupBy(d => d.Supplier?.DisplayName ?? "Necunoscut")
             .Select(g => new SupplierStat(g.Key, g.Count(), g.Sum(d => d.GrossTotal ?? 0)))
             .OrderByDescending(x => x.TotalValue)
             .ToList();

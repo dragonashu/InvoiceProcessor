@@ -76,6 +76,21 @@ public class PdfExtractionPipeline(
             {
                 document.SupplierId = supplier.Id;
             }
+            else if (cls.supplierName is not null || cls.vatNo is not null)
+            {
+                // Auto-create supplier from detected info
+                supplier = new Supplier
+                {
+                    Name = cls.supplierName ?? cls.vatNo!,
+                    VatNo = cls.vatNo,
+                };
+                db.Suppliers.Add(supplier);
+                await db.SaveChangesAsync(cancellationToken);
+                suppliers.Add(supplier);
+                document.SupplierId = supplier.Id;
+                logger.LogInformation("Auto-created supplier '{Name}' (VAT: {Vat}) for document {DocumentId}",
+                    supplier.Name, supplier.VatNo, documentId);
+            }
             else
             {
                 document.Status = DocumentStatus.NeedsReview;
@@ -97,15 +112,35 @@ public class PdfExtractionPipeline(
                 logger.LogInformation("Used supplier extractor '{Extractor}' for document {DocumentId}",
                     matchedExtractor.SupplierKey, documentId);
 
-                // Second-pass supplier match using extractor's supplier name if classifier didn't find one
-                if (document.SupplierId is null && invoice.Supplier is not null)
+                // Second-pass: use extractor's supplier name to find/create/update supplier
+                if (invoice.Supplier is not null)
                 {
-                    supplier = suppliers.FirstOrDefault(s =>
-                        s.Name.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase) ||
-                        s.AliasesJson.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase));
-                    if (supplier is not null)
+                    if (document.SupplierId is null)
                     {
-                        document.SupplierId = supplier.Id;
+                        supplier = suppliers.FirstOrDefault(s =>
+                            s.Name.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase) ||
+                            s.AliasesJson.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase));
+                        if (supplier is not null)
+                        {
+                            document.SupplierId = supplier.Id;
+                        }
+                        else
+                        {
+                            supplier = new Supplier { Name = invoice.Supplier };
+                            db.Suppliers.Add(supplier);
+                            await db.SaveChangesAsync(cancellationToken);
+                            suppliers.Add(supplier);
+                            document.SupplierId = supplier.Id;
+                            logger.LogInformation("Auto-created supplier '{Name}' from extractor for document {DocumentId}",
+                                supplier.Name, documentId);
+                        }
+                    }
+                    else if (supplier is not null && supplier.Name == supplier.VatNo)
+                    {
+                        // Supplier was auto-created with VAT as name — update with real name from extractor
+                        supplier.Name = invoice.Supplier;
+                        logger.LogInformation("Updated supplier name from '{Vat}' to '{Name}' for document {DocumentId}",
+                            supplier.VatNo, invoice.Supplier, documentId);
                     }
                 }
             }

@@ -69,7 +69,7 @@ else
                             <th>Total</th>
                             <th>Tip</th>
                             <th>Stare</th>
-                            <th>Incredere</th>
+                            <th>Mapare</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -89,7 +89,10 @@ else
                                 <td class="num">@doc.GrossTotal?.ToString("N2")</td>
                                 <td><span class="badge status-processing">@doc.DocType</span></td>
                                 <td><span class="badge @IndexModel.StatusCssClass(doc.Status)">@IndexModel.StatusDisplayName(doc.Status)</span></td>
-                                <td class="num">@doc.Confidence.ToString("P0")</td>
+                                @{ var stats = IndexModel.GetMatchStats(doc); }
+                                <td class="num" style="@(stats.total == 0 ? "color: var(--c-text-muted);" : stats.matched == stats.total ? "color: var(--c-success); font-weight: 600;" : "color: var(--c-warning); font-weight: 600;")">
+                                    @(stats.total > 0 ? $"{stats.matched}/{stats.total}" : "-")
+                                </td>
                                 <td>
                                     <span class="row-actions">
                                         <a href="/Inbox/Edit/@doc.Id">Editeaza</a>

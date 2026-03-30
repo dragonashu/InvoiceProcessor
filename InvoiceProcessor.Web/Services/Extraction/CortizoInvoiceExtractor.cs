@@ -89,20 +89,17 @@ public class CortizoInvoiceExtractor : ISupplierInvoiceExtractor
 
         // --- Regex-based fields (work fine on raw text) ---
 
-        // Invoice number: "FACTURA S19 / 001745" — use {6} for the suffix to avoid capturing trailing page numbers
-        var facturaMatch = Regex.Match(text, @"FACTURA\s+(S\d{2,3}\s*/\s*\d{6})(?!\d)");
+        // Invoice number: "FACTURA S19 / 001745" or standalone "R21 / 006620"
+        var facturaMatch = Regex.Match(text, @"FACTURA\s+([A-Z]\d{2,3}\s*/\s*\d{6})(?!\d)");
+        if (!facturaMatch.Success)
+            facturaMatch = Regex.Match(text, @"([A-Z]\d{2,3}\s*/\s*\d{6})(?!\d)");
         if (facturaMatch.Success)
             header.InvoiceNo = facturaMatch.Groups[1].Value.Replace(" ", "");
 
-        // Supplier VAT (SK...)
-        var supplierVatMatch = Regex.Match(text, @"\b(SK\d{10,})\b");
+        // Supplier VAT — look for SK or RO VAT on the supplier header line
+        var supplierVatMatch = Regex.Match(text, @"\b((?:SK|RO)\d{8,12})\b");
         if (supplierVatMatch.Success)
             header.SupplierVat = supplierVatMatch.Groups[1].Value;
-
-        // Client VAT (RO...)
-        var clientVatMatch = Regex.Match(text, @"\b(RO\d{8,})\b");
-        if (clientVatMatch.Success)
-            header.ClientVat = clientVatMatch.Groups[1].Value;
 
         // --- Coordinate-based fields (from page 1 header and last page summary) ---
 
@@ -118,12 +115,14 @@ public class CortizoInvoiceExtractor : ISupplierInvoiceExtractor
             DateOnly.TryParseExact(dateWord.Text, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             header.InvoiceDate = date;
 
-        // Supplier name: words at X≈80-170, Y≈776 on page 1 (right after the SK VAT dash)
+        // Supplier name: words at Y≈776 on page 1, after the VAT number and dash
+        // Skip the VAT code and dash, capture the company name (e.g. "ALUMINIOS CORTIZO ROMANIA, S.R.L")
         var supplierNameWords = page1Words
-            .Where(w => w.BoundingBox.Left >= 80 && w.BoundingBox.Left < 200 &&
-                        Math.Abs(w.BoundingBox.Bottom - 776) < 3)
+            .Where(w => w.BoundingBox.Left >= 67 && w.BoundingBox.Left < 230 &&
+                        Math.Abs(w.BoundingBox.Bottom - 776) < 4)
             .OrderBy(w => w.BoundingBox.Left)
             .Select(w => w.Text)
+            .Where(t => t != "-") // skip the dash separator
             .ToList();
         if (supplierNameWords.Count > 0)
             header.SupplierName = string.Join(" ", supplierNameWords).TrimEnd(',').Trim();

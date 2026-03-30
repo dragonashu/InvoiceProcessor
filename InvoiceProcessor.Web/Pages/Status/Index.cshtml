@@ -52,23 +52,24 @@ else
         <table class="data-table">
             <thead>
                 <tr>
+                    <th>Job ID</th>
                     <th>Furnizor</th>
                     <th>Nr. factura</th>
-                    <th>Nr. document</th>
                     <th>Stare</th>
                     <th>Doc. ERP</th>
                     <th>Eroare</th>
                     <th>Creat</th>
                     <th>Finalizat</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var job in Model.Jobs)
                 {
                     <tr>
-                        <td style="font-weight: 600;">@(job.Document.Supplier?.Name ?? "Necunoscut")</td>
+                        <td style="font-family: var(--font-mono); font-size: 11px; color: var(--c-text-muted); max-width: 90px; overflow: hidden; text-overflow: ellipsis;" title="@job.Id">@job.Id.ToString()[..8]</td>
+                        <td style="font-weight: 600;">@(job.Document.Supplier?.DisplayName ?? "Necunoscut")</td>
                         <td style="font-family: var(--font-mono); font-size: 13px;">@job.Document.InvoiceNo</td>
-                        <td style="font-family: var(--font-mono); font-size: 13px;">@job.Document.Filename</td>
                         <td><span class="badge @StatusBadge(job.Status)">@PostingStatusName(job.Status)</span></td>
                         <td style="font-family: var(--font-mono); font-size: 13px;">@job.ErpDocNo</td>
                         <td>
@@ -79,6 +80,11 @@ else
                         </td>
                         <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
                         <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CompletedAt?.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>
+                            <span class="row-actions">
+                                <a href="/Inbox/Preview/@job.DocumentId">Previzualizare</a>
+                            </span>
+                        </td>
                     </tr>
                 }
             </tbody>

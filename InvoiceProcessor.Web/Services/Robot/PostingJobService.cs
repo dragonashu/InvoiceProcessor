@@ -11,7 +11,7 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
 {
     public async Task<IReadOnlyList<PostingJob>> CreatePostingJobsAsync(IReadOnlyList<Guid> documentIds, CancellationToken cancellationToken)
     {
-        var docs = await db.Documents.Include(d => d.InvoiceLines).Include(d => d.ExtractArtifact).Where(d => documentIds.Contains(d.Id)).ToListAsync(cancellationToken);
+        var docs = await db.Documents.Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem).Include(d => d.ExtractArtifact).Where(d => documentIds.Contains(d.Id)).ToListAsync(cancellationToken);
         var batchId = Guid.NewGuid().ToString("N");
         var jobs = new List<PostingJob>();
 
@@ -27,7 +27,7 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
                 doc.Id,
                 doc.CorrelationId,
                 canonical,
-                doc.InvoiceLines.OrderBy(l => l.LineNo).Select(l => new ReadyToPostLine(l.LineNo, l.Description, l.Qty, l.Uom, l.Amount, l.MatchedItem?.ErpItemCode, l.MatchConfidence, l.MatchReason ?? string.Empty)).ToList());
+                doc.InvoiceLines.OrderBy(l => l.LineNo).Select(l => new ReadyToPostLine(l.LineNo, l.Description, l.Qty, l.Uom, l.Amount, l.MatchedItem?.ErpItemCode, l.MatchedItem?.Name, l.MatchConfidence, l.MatchReason ?? string.Empty, l.WarehouseCode, l.CostCenterCode)).ToList());
 
             var job = new PostingJob
             {
@@ -41,6 +41,10 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
             jobs.Add(job);
             doc.Status = DocumentStatus.Posting;
             db.PostingJobs.Add(job);
+
+            // Learn: save vendor code -> catalog item mappings for matched lines
+            if (doc.SupplierId.HasValue)
+                await LearnMappingsAsync(doc.SupplierId.Value, doc.InvoiceLines, cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -142,6 +146,41 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
             PayloadJson = JsonSerializer.Serialize(request)
         });
 
+        // Learn on success: confirm all mappings from this document
+        if (job.Status == PostingJobStatus.Success && job.Document.SupplierId.HasValue)
+        {
+            var lines = await db.InvoiceLines
+                .Include(l => l.MatchedItem)
+                .Where(l => l.DocumentId == job.DocumentId)
+                .ToListAsync(cancellationToken);
+            await LearnMappingsAsync(job.Document.SupplierId.Value, lines, cancellationToken);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task LearnMappingsAsync(Guid supplierId, IEnumerable<InvoiceLine> lines, CancellationToken cancellationToken)
+    {
+        var existingMappings = await db.SupplierItemMappings
+            .Where(m => m.SupplierId == supplierId && m.Active)
+            .Select(m => m.VendorCode)
+            .ToListAsync(cancellationToken);
+
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line.VendorCode) || line.MatchedItemId is null)
+                continue;
+
+            if (existingMappings.Contains(line.VendorCode))
+                continue;
+
+            db.SupplierItemMappings.Add(new SupplierItemMapping
+            {
+                SupplierId = supplierId,
+                VendorCode = line.VendorCode,
+                CatalogItemId = line.MatchedItemId.Value
+            });
+            existingMappings.Add(line.VendorCode);
+        }
     }
 }

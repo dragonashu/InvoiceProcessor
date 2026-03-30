@@ -61,6 +61,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("InternalCode")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -73,7 +76,37 @@ namespace InvoiceProcessor.Web.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ErpItemCode")
+                        .IsUnique();
+
+                    b.HasIndex("InternalCode");
+
                     b.ToTable("CatalogItems");
+                });
+
+            modelBuilder.Entity("InvoiceProcessor.Web.Models.CostCenter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("CostCenters");
                 });
 
             modelBuilder.Entity("InvoiceProcessor.Web.Models.Document", b =>
@@ -179,6 +212,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CostCenterCode")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -208,6 +244,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("VendorCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WarehouseCode")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -283,6 +322,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.Property<string>("Country")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ErpName")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -323,6 +365,31 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.HasIndex("SupplierId");
 
                     b.ToTable("SupplierItemMappings");
+                });
+
+            modelBuilder.Entity("InvoiceProcessor.Web.Models.Warehouse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Warehouses");
                 });
 
             modelBuilder.Entity("InvoiceProcessor.Web.Models.AuditEvent", b =>

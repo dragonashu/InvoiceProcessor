@@ -71,6 +71,10 @@
               "target": "Package",
               "version": "[8.0.7, )"
             },
+            "Microsoft.Extensions.Hosting.WindowsServices": {
+              "target": "Package",
+              "version": "[8.0.1, )"
+            },
             "PdfPig": {
               "target": "Package",
               "version": "[0.1.13, )"
