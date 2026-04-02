@@ -16,7 +16,15 @@
       "Bash(dotnet tool:*)",
       "Bash(taskkill //F //IM dotnet.exe)",
       "Bash(sqlite3 InvoiceProcessor.Web/Data/invoice-processor.db \":*)",
-      "Bash(taskkill //F //IM InvoiceProcessor.Web.exe)"
+      "Bash(taskkill //F //IM InvoiceProcessor.Web.exe)",
+      "Bash(xxd)",
+      "Bash(taskkill //F //PID 19908)",
+      "Bash(ls *.sln)",
+      "Bash(ls InvoiceProcessor.Web/*.csproj)",
+      "Bash(sqlite3 /c/it/InvoiceProcessor/InvoiceProcessor.Web/Data/invoice-processor.db \":*)",
+      "Bash(taskkill //F //IM InvoiceProcessor.Web.exe 2)",
+      "Bash(/dev/null dotnet:*)",
+      "Bash(taskkill //F //PID 30096)"
     ]
   }
 }

@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SupplierItemMapping> SupplierItemMappings => Set<SupplierItemMapping>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
+    public DbSet<CatalogJob> CatalogJobs => Set<CatalogJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -23,7 +24,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<ExtractArtifact>().HasIndex(x => x.DocumentId).IsUnique();
         modelBuilder.Entity<PostingJob>().HasIndex(x => new { x.DocumentId, x.Status });
         modelBuilder.Entity<CatalogItem>().HasIndex(x => x.ErpItemCode).IsUnique();
-        modelBuilder.Entity<CatalogItem>().HasIndex(x => x.InternalCode);
+        modelBuilder.Entity<CatalogJob>().HasIndex(x => new { x.CatalogItemId, x.Status });
+        modelBuilder.Entity<CatalogJob>()
+            .HasOne(j => j.CatalogItem)
+            .WithMany()
+            .HasForeignKey(j => j.CatalogItemId);
+
         modelBuilder.Entity<Warehouse>().HasIndex(x => x.Code).IsUnique();
         modelBuilder.Entity<CostCenter>().HasIndex(x => x.Code).IsUnique();
 

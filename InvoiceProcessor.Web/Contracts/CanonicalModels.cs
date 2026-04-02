@@ -34,3 +34,9 @@ public record CreatePostingJobsRequest(IReadOnlyList<Guid> DocumentIds);
 public record SupplierRequest(string Name, string? ErpName, string? VatNo, string? Country, string? AliasesJson, bool Active = true);
 
 public record SaveMappingRequest(Guid SupplierId, string VendorCode, Guid CatalogItemId, Guid? InvoiceLineId);
+
+public record AcceptNewItemRequest(string ErpItemCode, string Name, string? Uom);
+
+public record CatalogItemPayload(Guid CatalogJobId, Guid CatalogItemId, string Code, string Name, string? Uom);
+
+public record CatalogJobCompleteRequest(string Result, string? InternalCode, string? ErrorMessage, string? ResultJson);

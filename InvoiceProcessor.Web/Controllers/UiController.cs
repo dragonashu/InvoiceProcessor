@@ -182,6 +182,87 @@ public class UiController(AppDbContext db, IPostingJobService postingJobService)
         return Ok();
     }
 
+    [HttpGet("catalog/new-items")]
+    public async Task<IActionResult> GetNewItems(CancellationToken cancellationToken)
+    {
+        var items = await db.CatalogItems
+            .Where(c => c.IsAutoCreated && c.Active)
+            .OrderByDescending(c => c.AutoCreatedAt)
+            .Select(c => new { c.Id, c.ErpItemCode, c.Name, c.Uom, c.AutoCreatedAt })
+            .ToListAsync(cancellationToken);
+
+        // Find source document + line number for each new item
+        var itemIds = items.Select(i => i.Id).ToList();
+        var sources = await db.InvoiceLines
+            .Where(l => l.MatchedItemId != null && itemIds.Contains(l.MatchedItemId.Value))
+            .Include(l => l.Document)
+            .GroupBy(l => l.MatchedItemId)
+            .Select(g => new { CatalogItemId = g.Key, Line = g.OrderBy(l => l.LineNo).First() })
+            .ToListAsync(cancellationToken);
+        var sourceMap = sources.ToDictionary(s => s.CatalogItemId!.Value, s => s.Line);
+
+        var result = items.Select(i =>
+        {
+            sourceMap.TryGetValue(i.Id, out var srcLine);
+            return new
+            {
+                i.Id, i.ErpItemCode, i.Name, i.Uom, i.AutoCreatedAt,
+                DocumentId = srcLine?.DocumentId,
+                InvoiceNo = srcLine?.Document?.InvoiceNo ?? srcLine?.Document?.Filename,
+                LineNo = srcLine?.LineNo
+            };
+        });
+        return Ok(result);
+    }
+
+    [HttpPut("catalog/new-items/{id:guid}/accept")]
+    public async Task<IActionResult> AcceptNewItem(Guid id, [FromBody] AcceptNewItemRequest request, CancellationToken cancellationToken)
+    {
+        var item = await db.CatalogItems.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (item is null) return NotFound();
+
+        item.ErpItemCode = request.ErpItemCode;
+        item.Name = request.Name;
+        item.Uom = request.Uom;
+        // Keep IsAutoCreated = true until the robot confirms creation in ERP
+
+        // Create a catalog job for the robot to process
+        var payload = new CatalogItemPayload(Guid.NewGuid(), item.Id, item.ErpItemCode, item.Name, item.Uom);
+        var job = new Models.CatalogJob
+        {
+            Id = payload.CatalogJobId,
+            CatalogItemId = item.Id,
+            BatchId = Guid.NewGuid().ToString("N"),
+            Status = Models.CatalogJobStatus.Queued,
+            RequestJson = System.Text.Json.JsonSerializer.Serialize(payload)
+        };
+        db.CatalogJobs.Add(job);
+
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(new { item.Id, item.ErpItemCode, item.Name, jobId = job.Id });
+    }
+
+    [HttpDelete("catalog/new-items/{id:guid}")]
+    public async Task<IActionResult> RejectNewItem(Guid id, CancellationToken cancellationToken)
+    {
+        var item = await db.CatalogItems.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (item is null) return NotFound();
+
+        // Clear matches on invoice lines that referenced this item
+        var linkedLines = await db.InvoiceLines.Where(l => l.MatchedItemId == id).ToListAsync(cancellationToken);
+        foreach (var line in linkedLines)
+        {
+            line.MatchedItemId = null;
+            line.MatchConfidence = 0;
+            line.MatchReason = "rejected";
+        }
+
+        item.Active = false;
+        item.IsAutoCreated = false;
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok();
+    }
+
     [HttpGet("warehouses")]
     public async Task<IActionResult> SearchWarehouses([FromQuery] string? q, CancellationToken cancellationToken)
     {

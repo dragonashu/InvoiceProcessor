@@ -96,6 +96,58 @@
   },
   {
     "ContainingType": "InvoiceProcessor.Web.Controllers.RobotController",
+    "Method": "ListCatalogJobs",
+    "RelativePath": "robot/jobs/catalog",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "status",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "limit",
+        "Type": "System.Int32",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.RobotController",
+    "Method": "CompleteCatalogJob",
+    "RelativePath": "robot/jobs/catalog/{id}/complete",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Guid",
+        "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "InvoiceProcessor.Web.Contracts.CatalogJobCompleteRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.RobotController",
+    "Method": "NextCatalogJob",
+    "RelativePath": "robot/jobs/catalog/next",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.RobotController",
     "Method": "Next",
     "RelativePath": "robot/jobs/next",
     "HttpMethod": "GET",
@@ -115,6 +167,53 @@
       {
         "Name": "request",
         "Type": "InvoiceProcessor.Web.Contracts.SaveMappingRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "GetNewItems",
+    "RelativePath": "ui/catalog/new-items",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "RejectNewItem",
+    "RelativePath": "ui/catalog/new-items/{id}",
+    "HttpMethod": "DELETE",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Guid",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "AcceptNewItem",
+    "RelativePath": "ui/catalog/new-items/{id}/accept",
+    "HttpMethod": "PUT",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Guid",
+        "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "InvoiceProcessor.Web.Contracts.AcceptNewItemRequest",
         "IsRequired": true
       }
     ],

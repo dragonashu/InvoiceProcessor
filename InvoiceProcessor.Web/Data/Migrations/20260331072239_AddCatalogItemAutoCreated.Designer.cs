@@ -3,6 +3,7 @@ using System;
 using InvoiceProcessor.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InvoiceProcessor.Web.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260331072239_AddCatalogItemAutoCreated")]
+    partial class AddCatalogItemAutoCreated
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.7");
@@ -64,6 +67,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("InternalCode")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsAutoCreated")
                         .HasColumnType("INTEGER");
 
@@ -82,52 +88,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.HasIndex("ErpItemCode")
                         .IsUnique();
 
+                    b.HasIndex("InternalCode");
+
                     b.ToTable("CatalogItems");
-                });
-
-            modelBuilder.Entity("InvoiceProcessor.Web.Models.CatalogJob", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("BatchId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("CatalogItemId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("ClaimedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ErpItemCode")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RequestJson")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ResultJson")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CatalogItemId", "Status");
-
-                    b.ToTable("CatalogJobs");
                 });
 
             modelBuilder.Entity("InvoiceProcessor.Web.Models.CostCenter", b =>
@@ -445,17 +408,6 @@ namespace InvoiceProcessor.Web.Data.Migrations
                         .HasForeignKey("DocumentId");
 
                     b.Navigation("Document");
-                });
-
-            modelBuilder.Entity("InvoiceProcessor.Web.Models.CatalogJob", b =>
-                {
-                    b.HasOne("InvoiceProcessor.Web.Models.CatalogItem", "CatalogItem")
-                        .WithMany()
-                        .HasForeignKey("CatalogItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CatalogItem");
                 });
 
             modelBuilder.Entity("InvoiceProcessor.Web.Models.Document", b =>

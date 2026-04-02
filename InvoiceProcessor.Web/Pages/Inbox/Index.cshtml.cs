@@ -16,6 +16,7 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
     public List<Guid> SelectedDocumentIds { get; set; } = [];
 
     public List<SupplierGroup> SupplierGroups { get; set; } = [];
+    public int NewItemsCount { get; set; }
     public string? Message { get; set; }
 
     private static readonly DocumentStatus[] ActionableStatuses =
@@ -64,6 +65,7 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
             .ToList();
 
         SupplierGroups = groups;
+        NewItemsCount = await db.CatalogItems.CountAsync(c => c.IsAutoCreated && c.Active, cancellationToken);
     }
 
     public async Task<IActionResult> OnPostRefreshAsync(CancellationToken cancellationToken)
@@ -85,12 +87,13 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
     public static bool IsSelectable(Document doc) =>
         doc.DocType == DocumentType.Invoice && SelectableStatuses.Contains(doc.Status);
 
-    public static (int matched, int total) GetMatchStats(Document doc)
+    public static (int matched, int total, int autoCreated) GetMatchStats(Document doc)
     {
         var lines = doc.InvoiceLines;
-        if (lines.Count == 0) return (0, 0);
+        if (lines.Count == 0) return (0, 0, 0);
         var matched = lines.Count(l => l.MatchedItemId.HasValue && l.MatchConfidence >= 0.60m);
-        return (matched, lines.Count);
+        var autoCreated = lines.Count(l => l.MatchReason == "auto-created");
+        return (matched, lines.Count, autoCreated);
     }
 
     public static string StatusCssClass(DocumentStatus status) => status switch

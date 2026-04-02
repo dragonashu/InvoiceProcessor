@@ -144,16 +144,21 @@
                     </div>
                 </div>
             </form>
-            <form method="post" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--c-border-light);">
-                <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--c-border-light); flex-wrap: wrap; align-items: center;">
+                <form method="post" style="margin:0;">
                     <button type="submit" asp-page-handler="Rematch" class="btn btn-secondary" style="color: var(--c-primary);"
-                            onclick="return confirm('Re-asociezi toate documentele cu catalogul curent?\nAceasta operatiune poate dura cateva secunde.')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            onclick="return confirm('Re-asociezi toate documentele cu catalogul curent?')">
                         Re-asociaza toate documentele
                     </button>
-                    <span style="font-size: 12px; color: var(--c-text-muted);">Ruleaza matching-ul pe toate documentele existente cu catalogul curent</span>
-                </div>
-            </form>
+                </form>
+                <form method="post" style="margin:0;">
+                    <button type="submit" asp-page-handler="ClearProposedItems" class="btn btn-secondary" style="color: var(--c-danger);"
+                            onclick="return confirm('Stergi toate articolele propuse automat de sistem?')">
+                        Sterge articole propuse
+                    </button>
+                </form>
+                <span style="font-size: 12px; color: var(--c-text-muted);">@Model.ProposedItemCount articol(e) propuse</span>
+            </div>
         </div>
     </div>
 

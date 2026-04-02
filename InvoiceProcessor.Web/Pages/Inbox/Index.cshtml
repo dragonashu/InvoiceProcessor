@@ -19,6 +19,165 @@
     <div class="alert alert-success">@Model.Message</div>
 }
 
+@if (Model.NewItemsCount > 0)
+{
+    <details class="card" style="margin-bottom: 24px; border-left: 4px solid #e67e22;" open>
+        <summary style="padding: 16px 20px; cursor: pointer; font-weight: 600; color: #e67e22; display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e67e22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            @Model.NewItemsCount articol(e) noi propuse de sistem — necesita verificare
+        </summary>
+        <div style="padding: 0 20px 16px;">
+            <p style="font-size: 12px; color: var(--c-text-muted); margin-bottom: 12px;">
+                Aceste articole au fost create automat deoarece nu s-au gasit in nomenclator. Verificati codul ERP, denumirea si UM, apoi acceptati sau respingeti.
+            </p>
+            <table class="data-table" id="newItemsTable">
+                <thead>
+                    <tr>
+                        <th>Cod intern</th>
+                        <th>Denumire</th>
+                        <th>UM</th>
+                        <th>Sursa</th>
+                        <th style="width:160px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="newItemsBody">
+                    <tr><td colspan="5" style="text-align:center; color: var(--c-text-muted); padding: 12px;">Se incarca...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </details>
+    <style>
+        #newItemsTable input { padding: 5px 8px; font-size: 13px; border: 1px solid var(--c-border); border-radius: var(--radius); width: 100%; font-family: inherit; background: var(--c-surface); color: var(--c-text); }
+        #newItemsTable input:focus { outline: none; border-color: #e67e22; box-shadow: 0 0 0 2px rgba(230,126,34,0.15); }
+        .btn-accept { padding: 4px 10px; font-size: 12px; border: 1px solid var(--c-success); background: var(--c-success-bg); color: var(--c-success); border-radius: var(--radius); cursor: pointer; font-weight: 600; }
+        .btn-accept:hover { background: var(--c-success); color: white; }
+        .btn-reject { padding: 4px 10px; font-size: 12px; border: 1px solid var(--c-danger); background: none; color: var(--c-danger); border-radius: var(--radius); cursor: pointer; }
+        .btn-reject:hover { background: var(--c-danger-bg); }
+        .pdf-modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .pdf-modal-overlay.active { display: flex; }
+        .pdf-modal { background: var(--c-surface); border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgba(0,0,0,0.3); width: 80vw; height: 85vh; display: flex; flex-direction: column; }
+        .pdf-modal-header { padding: 12px 20px; border-bottom: 1px solid var(--c-border); display: flex; justify-content: space-between; align-items: center; }
+        .pdf-modal-header h3 { font-size: 15px; margin: 0; }
+        .pdf-modal iframe { flex: 1; border: none; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+    </style>
+
+    <div class="pdf-modal-overlay" id="pdfPreviewModal">
+        <div class="pdf-modal">
+            <div class="pdf-modal-header">
+                <h3>Previzualizare factura</h3>
+                <button type="button" class="btn btn-secondary" style="padding: 4px 12px; font-size: 13px;"
+                        onclick="closePdfModal()">Inchide</button>
+            </div>
+            <div id="pdfPreviewItemInfo" style="display:none; padding:10px 20px; background:#fef3e2; border-bottom:1px solid #e67e22; font-size:13px;">
+                <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                    <span style="font-weight:600; color:#e67e22;">Linia <span id="pdfPreviewLineNo"></span></span>
+                    <label style="font-size:11px; color:var(--c-text-muted);">Cod intern</label>
+                    <input type="text" id="pdfPreviewCode" style="padding:4px 8px; font-size:12px; border:1px solid var(--c-border); border-radius:var(--radius); width:100px; font-family:var(--font-mono);" />
+                    <label style="font-size:11px; color:var(--c-text-muted);">Denumire</label>
+                    <input type="text" id="pdfPreviewName" style="padding:4px 8px; font-size:12px; border:1px solid var(--c-border); border-radius:var(--radius); width:220px;" />
+                    <label style="font-size:11px; color:var(--c-text-muted);">UM</label>
+                    <input type="text" id="pdfPreviewUom" style="padding:4px 8px; font-size:12px; border:1px solid var(--c-border); border-radius:var(--radius); width:50px;" />
+                    <button type="button" class="btn-accept" id="pdfPreviewAcceptBtn">Accepta</button>
+                </div>
+            </div>
+            <iframe id="pdfPreviewFrame" src=""></iframe>
+        </div>
+    </div>
+    <script>
+        (function () {
+            fetch('/ui/catalog/new-items').then(r => r.json()).then(function (items) {
+                var tbody = document.getElementById('newItemsBody');
+                if (items.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--c-text-muted); padding:12px;">Niciun articol nou.</td></tr>'; return; }
+                tbody.innerHTML = items.map(function (it) {
+                    var srcHtml = '-';
+                    if (it.documentId) {
+                        srcHtml = '<a href="#" class="pdf-preview-link" data-docid="' + it.documentId + '" data-lineno="' + (it.lineNo || '') + '" style="font-size:12px; color:var(--c-primary);">' +
+                            (it.invoiceNo || 'PDF') + (it.lineNo ? ' #' + it.lineNo : '') + '</a>';
+                    }
+                    return '<tr data-id="' + it.id + '">' +
+                        '<td><input type="text" class="ni-erp" value="' + (it.erpItemCode || '').replace(/"/g, '&quot;') + '" /></td>' +
+                        '<td><input type="text" class="ni-name" value="' + (it.name || '').replace(/"/g, '&quot;') + '" /></td>' +
+                        '<td><input type="text" class="ni-uom" value="' + (it.uom || '').replace(/"/g, '&quot;') + '" style="width:60px;" /></td>' +
+                        '<td>' + srcHtml + '</td>' +
+                        '<td style="display:flex; gap:4px;">' +
+                            '<button class="btn-accept" onclick="acceptItem(this)">Accepta</button>' +
+                            '<button class="btn-reject" onclick="rejectItem(this)">Respinge</button>' +
+                        '</td></tr>';
+                }).join('');
+
+                // Bind PDF preview links
+                tbody.querySelectorAll('.pdf-preview-link').forEach(function (a) {
+                    a.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        var row = a.closest('tr');
+                        var docId = a.dataset.docid;
+                        var lineNo = a.dataset.lineno;
+                        var itemId = row.dataset.id;
+                        openPdfModal(docId, itemId, lineNo,
+                            row.querySelector('.ni-erp').value,
+                            row.querySelector('.ni-name').value,
+                            row.querySelector('.ni-uom').value,
+                            row);
+                    });
+                });
+            });
+        })();
+
+        function acceptItem(btn) {
+            var row = btn.closest('tr');
+            var id = row.dataset.id;
+            var data = { erpItemCode: row.querySelector('.ni-erp').value, name: row.querySelector('.ni-name').value, uom: row.querySelector('.ni-uom').value };
+            fetch('/ui/catalog/new-items/' + id + '/accept', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+                .then(function (r) { if (r.ok) { row.style.background = '#e6f9ed'; row.querySelector('td:last-child').innerHTML = '<span style="color:var(--c-success);font-weight:600;">Acceptat</span>'; } });
+        }
+
+        var _pdfModalRow = null;
+        function openPdfModal(docId, itemId, lineNo, code, name, uom, sourceRow) {
+            _pdfModalRow = sourceRow;
+            document.getElementById('pdfPreviewFrame').src = '/ui/documents/' + docId + '/pdf#toolbar=1&navpanes=0&view=FitH';
+            var info = document.getElementById('pdfPreviewItemInfo');
+            info.style.display = '';
+            info.dataset.itemId = itemId;
+            document.getElementById('pdfPreviewLineNo').textContent = lineNo || '?';
+            document.getElementById('pdfPreviewCode').value = code;
+            document.getElementById('pdfPreviewName').value = name;
+            document.getElementById('pdfPreviewUom').value = uom;
+            document.getElementById('pdfPreviewModal').classList.add('active');
+        }
+        function closePdfModal() {
+            document.getElementById('pdfPreviewModal').classList.remove('active');
+            document.getElementById('pdfPreviewFrame').src = '';
+        }
+        document.getElementById('pdfPreviewModal').addEventListener('click', function (e) {
+            if (e.target === this) closePdfModal();
+        });
+        document.getElementById('pdfPreviewAcceptBtn').addEventListener('click', function () {
+            var info = document.getElementById('pdfPreviewItemInfo');
+            var id = info.dataset.itemId;
+            var data = { erpItemCode: document.getElementById('pdfPreviewCode').value, name: document.getElementById('pdfPreviewName').value, uom: document.getElementById('pdfPreviewUom').value };
+            fetch('/ui/catalog/new-items/' + id + '/accept', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+                .then(function (r) {
+                    if (r.ok && _pdfModalRow) {
+                        _pdfModalRow.querySelector('.ni-erp').value = data.erpItemCode;
+                        _pdfModalRow.querySelector('.ni-name').value = data.name;
+                        _pdfModalRow.querySelector('.ni-uom').value = data.uom;
+                        _pdfModalRow.style.background = '#e6f9ed';
+                        _pdfModalRow.querySelector('td:last-child').innerHTML = '<span style="color:var(--c-success);font-weight:600;">Acceptat</span>';
+                    }
+                    closePdfModal();
+                });
+        });
+
+        function rejectItem(btn) {
+            if (!confirm('Respingi acest articol?')) return;
+            var row = btn.closest('tr');
+            var id = row.dataset.id;
+            fetch('/ui/catalog/new-items/' + id, { method: 'DELETE' })
+                .then(function (r) { if (r.ok) { row.style.opacity = '0.3'; row.querySelector('td:last-child').innerHTML = '<span style="color:var(--c-danger);">Respins</span>'; } });
+        }
+    </script>
+}
+
 @if (Model.SupplierGroups.Count == 0)
 {
     <div class="card">
@@ -70,6 +229,7 @@ else
                             <th>Tip</th>
                             <th>Stare</th>
                             <th>Mapare</th>
+                            <th>Noi</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -92,6 +252,9 @@ else
                                 @{ var stats = IndexModel.GetMatchStats(doc); }
                                 <td class="num" style="@(stats.total == 0 ? "color: var(--c-text-muted);" : stats.matched == stats.total ? "color: var(--c-success); font-weight: 600;" : "color: var(--c-warning); font-weight: 600;")">
                                     @(stats.total > 0 ? $"{stats.matched}/{stats.total}" : "-")
+                                </td>
+                                <td class="num" style="@(stats.autoCreated > 0 ? "color: #e67e22; font-weight: 600;" : "color: var(--c-text-muted);")">
+                                    @(stats.autoCreated > 0 ? stats.autoCreated.ToString() : "-")
                                 </td>
                                 <td>
                                     <span class="row-actions">

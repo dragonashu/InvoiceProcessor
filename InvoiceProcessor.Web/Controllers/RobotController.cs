@@ -1,13 +1,17 @@
+using System.Text.Json;
 using InvoiceProcessor.Web.Contracts;
+using InvoiceProcessor.Web.Data;
 using InvoiceProcessor.Web.Enums;
+using InvoiceProcessor.Web.Models;
 using InvoiceProcessor.Web.Services.Robot;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace InvoiceProcessor.Web.Controllers;
 
 [ApiController]
 [Route("robot/jobs")]
-public class RobotController(IPostingJobService postingJobService) : ControllerBase
+public class RobotController(IPostingJobService postingJobService, AppDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] int limit = 50, CancellationToken cancellationToken = default)
@@ -77,5 +81,73 @@ public class RobotController(IPostingJobService postingJobService) : ControllerB
     {
         await postingJobService.CompleteJobAsync(id, request, cancellationToken);
         return Ok(new { id, status = request.Result });
+    }
+
+    // ─── Catalog item jobs (same pattern: queue → claim → complete) ───
+
+    [HttpGet("catalog")]
+    public async Task<IActionResult> ListCatalogJobs([FromQuery] string? status, [FromQuery] int limit = 50, CancellationToken cancellationToken = default)
+    {
+        var query = db.CatalogJobs.Include(j => j.CatalogItem).AsQueryable();
+        if (status is not null && Enum.TryParse<CatalogJobStatus>(status, true, out var s))
+            query = query.Where(j => j.Status == s);
+        var jobs = await query.OrderBy(j => j.CreatedAt).Take(Math.Clamp(limit, 1, 200)).ToListAsync(cancellationToken);
+        return Ok(jobs.Select(j => new
+        {
+            j.Id, j.CatalogItemId, j.BatchId, Status = j.Status.ToString(),
+            j.CreatedAt, j.ClaimedAt, j.CompletedAt, j.ErpItemCode, j.ErrorMessage,
+            ItemCode = j.CatalogItem?.ErpItemCode, ItemName = j.CatalogItem?.Name, ItemUom = j.CatalogItem?.Uom
+        }));
+    }
+
+    [HttpGet("catalog/next")]
+    public async Task<IActionResult> NextCatalogJob(CancellationToken cancellationToken)
+    {
+        var job = await db.CatalogJobs
+            .Include(j => j.CatalogItem)
+            .Where(j => j.Status == CatalogJobStatus.Queued)
+            .OrderBy(j => j.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (job is null) return NoContent();
+
+        job.Status = CatalogJobStatus.Claimed;
+        job.ClaimedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+
+        var payload = JsonSerializer.Deserialize<CatalogItemPayload>(job.RequestJson);
+        return Ok(payload);
+    }
+
+    [HttpPost("catalog/{id:guid}/complete")]
+    public async Task<IActionResult> CompleteCatalogJob(Guid id, [FromBody] CatalogJobCompleteRequest request, CancellationToken cancellationToken)
+    {
+        var job = await db.CatalogJobs.Include(j => j.CatalogItem).FirstOrDefaultAsync(j => j.Id == id, cancellationToken);
+        if (job is null) return NotFound();
+
+        job.CompletedAt = DateTime.UtcNow;
+        job.ResultJson = request.ResultJson;
+        job.ErrorMessage = request.ErrorMessage;
+
+        if (request.Result.Equals("Success", StringComparison.OrdinalIgnoreCase))
+        {
+            job.Status = CatalogJobStatus.Success;
+            // Update the catalog item with the confirmed code if the robot assigned one
+            if (!string.IsNullOrWhiteSpace(request.InternalCode) && job.CatalogItem is not null)
+            {
+                job.CatalogItem.ErpItemCode = request.InternalCode;
+                job.ErpItemCode = request.InternalCode;
+            }
+            // Mark as no longer auto-created — it's now in ERP
+            if (job.CatalogItem is not null)
+                job.CatalogItem.IsAutoCreated = false;
+        }
+        else
+        {
+            job.Status = CatalogJobStatus.Failed;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(new { id, status = job.Status.ToString() });
     }
 }

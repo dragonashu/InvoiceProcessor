@@ -3,6 +3,7 @@ using System;
 using InvoiceProcessor.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InvoiceProcessor.Web.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260331190617_AddCatalogJobs")]
+    partial class AddCatalogJobs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.7");
@@ -64,6 +67,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("InternalCode")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsAutoCreated")
                         .HasColumnType("INTEGER");
 
@@ -81,6 +87,8 @@ namespace InvoiceProcessor.Web.Data.Migrations
 
                     b.HasIndex("ErpItemCode")
                         .IsUnique();
+
+                    b.HasIndex("InternalCode");
 
                     b.ToTable("CatalogItems");
                 });

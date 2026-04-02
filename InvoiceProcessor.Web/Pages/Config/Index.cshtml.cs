@@ -5,6 +5,7 @@ using InvoiceProcessor.Web.Services.Matching;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace InvoiceProcessor.Web.Pages.Config;
 
@@ -15,6 +16,7 @@ public class IndexModel(AppDbContext db, IMatchingEngine matchingEngine) : PageM
     public int MappingCount { get; set; }
     public int WarehouseCount { get; set; }
     public int CostCenterCount { get; set; }
+    public int ProposedItemCount { get; set; }
     public string? Message { get; set; }
 
     [BindProperty] public Guid? EditId { get; set; }
@@ -36,6 +38,7 @@ public class IndexModel(AppDbContext db, IMatchingEngine matchingEngine) : PageM
         MappingCount = await db.SupplierItemMappings.CountAsync(m => m.Active, ct);
         WarehouseCount = await db.Warehouses.CountAsync(w => w.Active, ct);
         CostCenterCount = await db.CostCenters.CountAsync(c => c.Active, ct);
+        ProposedItemCount = await db.CatalogItems.CountAsync(c => c.IsAutoCreated && c.Active, ct);
     }
 
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken ct)
@@ -180,6 +183,19 @@ public class IndexModel(AppDbContext db, IMatchingEngine matchingEngine) : PageM
         }
         await db.SaveChangesAsync(ct);
         return RedirectToPage(new { message = $"Centre de cost importate: {added} noi, {updated} actualizate." });
+    }
+
+    public async Task<IActionResult> OnPostClearProposedItemsAsync(CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE InvoiceLines SET MatchedItemId = NULL, MatchConfidence = 0, MatchReason = 'proposed-cleared' WHERE MatchedItemId IN (SELECT Id FROM CatalogItems WHERE IsAutoCreated = 1)", ct);
+        await db.Database.ExecuteSqlRawAsync(
+            "DELETE FROM CatalogJobs WHERE CatalogItemId IN (SELECT Id FROM CatalogItems WHERE IsAutoCreated = 1)", ct);
+        await db.Database.ExecuteSqlRawAsync(
+            "DELETE FROM SupplierItemMappings WHERE CatalogItemId IN (SELECT Id FROM CatalogItems WHERE IsAutoCreated = 1)", ct);
+        var count = await db.Database.ExecuteSqlRawAsync(
+            "DELETE FROM CatalogItems WHERE IsAutoCreated = 1", ct);
+        return RedirectToPage(new { message = $"{count} articol(e) propuse sterse." });
     }
 
     public async Task<IActionResult> OnPostRematchAsync(CancellationToken ct)

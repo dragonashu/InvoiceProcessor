@@ -125,7 +125,8 @@
                         var matchItem = matchedLine?.MatchedItem;
                         var hasMatch = matchItem is not null;
                         var matchConf = matchedLine?.MatchConfidence ?? 0m;
-                        var matchCss = matchConf >= 0.85m ? "color: var(--c-success); font-weight:600;" : matchConf >= 0.60m ? "color: var(--c-primary); font-weight:600;" : "color: var(--c-text-muted);";
+                        var isAutoCreated = matchedLine?.MatchReason == "auto-created";
+                        var matchCss = isAutoCreated ? "color: #e67e22; font-weight:600;" : matchConf >= 0.85m ? "color: var(--c-success); font-weight:600;" : matchConf >= 0.60m ? "color: var(--c-primary); font-weight:600;" : "color: var(--c-text-muted);";
                         <tr>
                             <td>
                                 <input type="text" name="Lines[@i].VendorItemCode" value="@Model.Lines[i].VendorItemCode" class="form-input form-input-sm" style="font-family:var(--font-mono); font-size:11px;" />

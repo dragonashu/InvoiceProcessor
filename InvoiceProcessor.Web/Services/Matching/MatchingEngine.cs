@@ -34,16 +34,18 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
             : [];
         var catalog = await db.CatalogItems.Where(c => c.Active).ToListAsync(cancellationToken);
 
-        // Pre-build catalog lookup by InternalCode for code-first matching
+        // PRIMARY lookup: by ErpItemCode (= Cod Intern from nomenclator)
+        // When multiple items share the same code, keep ALL of them for description-based disambiguation
         var catalogByCode = catalog
-            .Where(c => !string.IsNullOrWhiteSpace(c.InternalCode))
-            .GroupBy(c => NormalizeCode(c.InternalCode!))
-            .ToDictionary(g => g.Key, g => g.First());
+            .Where(c => !string.IsNullOrWhiteSpace(c.ErpItemCode))
+            .GroupBy(c => NormalizeCode(c.ErpItemCode))
+            .ToDictionary(g => g.Key, g => g.ToList());
 
-        // Pre-tokenize catalog items once (for description fallback)
+        // Pre-tokenize catalog items for description fallback
         var catalogTokens = catalog.Select(c => (Item: c, Tokens: Tokenize(c.Name), Dimensions: ExtractDimensions(c.Name))).ToList();
 
         var lineNo = 1;
+        int autoCreatedCount = 0;
         foreach (var line in invoice.Lines)
         {
             CatalogItem? matched = null;
@@ -62,38 +64,39 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                 }
             }
 
-            // Tier 2: CODE-FIRST - match VendorItemCode against catalog InternalCode
+            // Tier 2: CODE-FIRST - match VendorItemCode against catalog ErpItemCode (= Cod Intern)
             if (matched is null && !string.IsNullOrWhiteSpace(line.VendorItemCode))
             {
                 var normalizedVendor = NormalizeCode(line.VendorItemCode);
-                if (catalogByCode.TryGetValue(normalizedVendor, out var codeMatch))
+                if (catalogByCode.TryGetValue(normalizedVendor, out var codeMatches))
                 {
-                    matched = codeMatch;
+                    // If multiple items share the same code, pick the best by description similarity
+                    matched = PickBestByDescription(codeMatches, line.DescriptionRaw, catalogTokens);
                     confidence = 0.95m;
-                    reason = "catalog-code-match";
+                    reason = "code-match";
                 }
                 else
                 {
-                    // Try partial code match: strip variant suffix (e.g., ACFA501/LAN -> ACFA501)
+                    // Try partial: strip variant suffix (e.g., ACFA501/LAN -> ACFA501)
                     var baseCode = line.VendorItemCode.Contains('/')
                         ? NormalizeCode(line.VendorItemCode.Split('/')[0])
                         : null;
                     if (baseCode != null)
                     {
-                        var partialMatch = catalogByCode
+                        var partialCandidates = catalogByCode
                             .Where(kv => kv.Key.StartsWith(baseCode) || baseCode.StartsWith(kv.Key))
-                            .Select(kv => kv.Value)
-                            .FirstOrDefault();
-                        if (partialMatch != null)
+                            .SelectMany(kv => kv.Value)
+                            .ToList();
+                        if (partialCandidates.Count > 0)
                         {
-                            matched = partialMatch;
+                            matched = PickBestByDescription(partialCandidates, line.DescriptionRaw, catalogTokens);
                             confidence = 0.90m;
-                            reason = "catalog-code-partial";
+                            reason = "code-partial";
                         }
                     }
                 }
 
-                // Auto-learn: save mapping for future exact matches
+                // Auto-learn mapping for future
                 if (matched != null && document.SupplierId.HasValue)
                 {
                     var existingMapping = mappings.FirstOrDefault(m => m.VendorCode == line.VendorItemCode);
@@ -107,8 +110,6 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                         };
                         db.SupplierItemMappings.Add(newMapping);
                         mappings.Add(newMapping);
-                        logger.LogInformation("Auto-mapped vendor code '{VendorCode}' -> catalog '{ErpCode}' (code-match) for supplier {SupplierId}",
-                            line.VendorItemCode, matched.ErpItemCode, document.SupplierId);
                     }
                 }
             }
@@ -138,7 +139,6 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                     confidence = Math.Min(0.95m, bestScore);
                     reason = $"token-match({bestScore:F2})";
 
-                    // Auto-learn: if high confidence and vendor code exists, save mapping for future
                     if (bestScore >= 0.85m && !string.IsNullOrWhiteSpace(line.VendorItemCode) && document.SupplierId.HasValue)
                     {
                         var existingMapping = mappings.FirstOrDefault(m => m.VendorCode == line.VendorItemCode);
@@ -152,10 +152,51 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                             };
                             db.SupplierItemMappings.Add(newMapping);
                             mappings.Add(newMapping);
-                            logger.LogInformation("Auto-mapped vendor code '{VendorCode}' -> catalog '{ErpCode}' for supplier {SupplierId}",
-                                line.VendorItemCode, bestItem.ErpItemCode, document.SupplierId);
                         }
                     }
+                }
+            }
+
+            // Tier 4: AUTO-CREATE — no match found, create a new catalog item
+            // Use VendorItemCode as key if available, otherwise derive key from description
+            if (matched is null)
+            {
+                var itemKey = !string.IsNullOrWhiteSpace(line.VendorItemCode)
+                    ? line.VendorItemCode
+                    : GenerateDescriptionKey(line.DescriptionRaw);
+
+                if (!string.IsNullOrWhiteSpace(itemKey))
+                {
+                    var normalizedKey = NormalizeCode(itemKey);
+
+                    // Check if this code already exists in catalog (from prior run or this batch)
+                    var alreadyExists = catalog.FirstOrDefault(c =>
+                        NormalizeCode(c.ErpItemCode) == normalizedKey);
+
+                    if (alreadyExists != null)
+                    {
+                        matched = alreadyExists;
+                    }
+                    else
+                    {
+                        var newItem = new CatalogItem
+                        {
+                            ErpItemCode = itemKey,
+                            Name = CapitalizeFirst(line.DescriptionRaw),
+                            Uom = line.Uom,
+                            IsAutoCreated = true,
+                            AutoCreatedAt = DateTime.UtcNow,
+                            Active = true
+                        };
+                        db.CatalogItems.Add(newItem);
+                        catalog.Add(newItem);
+                        catalogByCode[normalizedKey] = [newItem];
+                        matched = newItem;
+                        autoCreatedCount++;
+                    }
+
+                    confidence = 0.50m;
+                    reason = "auto-created";
                 }
             }
 
@@ -179,11 +220,58 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
         document.Status = minConfidence < 0.75m ? DocumentStatus.NeedsReview : DocumentStatus.ReadyToPost;
 
         await db.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Matched lines for {DocumentId}", documentId);
+
+        if (autoCreatedCount > 0)
+            logger.LogInformation("Matched lines for {DocumentId}: {AutoCreated} new catalog items auto-created", documentId, autoCreatedCount);
+        else
+            logger.LogInformation("Matched lines for {DocumentId}", documentId);
+    }
+
+    private static CatalogItem PickBestByDescription(
+        List<CatalogItem> candidates,
+        string invoiceDescription,
+        List<(CatalogItem Item, HashSet<string> Tokens, string? Dimensions)> catalogTokens)
+    {
+        if (candidates.Count == 1) return candidates[0];
+
+        // Score each candidate by description token overlap
+        var invoiceTokens = Tokenize(invoiceDescription);
+        var invoiceDims = ExtractDimensions(invoiceDescription);
+
+        CatalogItem? best = null;
+        decimal bestScore = -1;
+        foreach (var c in candidates)
+        {
+            var entry = catalogTokens.FirstOrDefault(ct => ct.Item.Id == c.Id);
+            var score = entry.Tokens != null
+                ? ScoreMatch(invoiceTokens, entry.Tokens, invoiceDims, entry.Dimensions)
+                : 0m;
+            if (score > bestScore) { bestScore = score; best = c; }
+        }
+        return best ?? candidates[0];
     }
 
     private static string NormalizeCode(string code) =>
         code.Trim().ToUpperInvariant().Replace(" ", "");
+
+    /// <summary>
+    /// Generates a stable short key from a description (for items without a vendor code).
+    /// Truncates to first 80 chars to keep it manageable as an ErpItemCode.
+    /// </summary>
+    private static string? GenerateDescriptionKey(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description)) return null;
+        var key = description.Trim();
+        if (key.Length > 80) key = key[..80];
+        return key;
+    }
+
+    private static string CapitalizeFirst(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text;
+        var trimmed = text.Trim();
+        return char.ToUpperInvariant(trimmed[0]) + trimmed[1..].ToLowerInvariant();
+    }
 
     public async Task<(int added, int updated)> ImportCatalogCsvAsync(Stream stream, CancellationToken cancellationToken)
     {
@@ -193,24 +281,28 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
 
         // Detect separator
         var separator = headerLine.Contains('\t') ? '\t' : headerLine.Contains(';') ? ';' : ',';
-        var headers = headerLine.Split(separator).Select(h => h.Trim().Trim('"').ToUpperInvariant()).ToList();
+        var headers = headerLine.TrimStart('\uFEFF').Split(separator).Select(h => h.Trim().Trim('"').ToUpperInvariant()).ToList();
 
         // Find column indices — flexible mapping
-        var codeIdx = FindColumnIndex(headers, "CODOBIECT", "ERP_ITEM_CODE", "COD", "CODE", "ITEMCODE");
+        // PRIMARY key: Cod Intern (supplier/vendor code used on invoices)
+        var codeIdx = FindColumnIndex(headers, "COD INTERN", "CODINTERN", "INTERNAL_CODE", "VENDOR_CODE", "COD", "CODE");
         var nameIdx = FindColumnIndex(headers, "DENUMIRE OBIECT", "DENUMIREOBIECT", "NAME", "DESCRIERE", "DESCRIPTION");
         var uomIdx = FindColumnIndex(headers, "UM", "UOM", "UNITATE");
         var taxIdx = FindColumnIndex(headers, "COTATVA", "COTA_TVA", "TAX_CODE", "TVA");
-        var internalCodeIdx = FindColumnIndex(headers, "COD INTERN", "CODINTERN", "INTERNAL_CODE", "VENDOR_CODE");
 
         if (codeIdx < 0 || nameIdx < 0)
         {
-            logger.LogWarning("CSV import: could not find required columns CODOBIECT and DENUMIRE OBIECT. Headers: {Headers}", string.Join(", ", headers));
+            logger.LogWarning("CSV import: could not find required columns (Cod Intern / Denumire obiect). Headers: {Headers}", string.Join(", ", headers));
             return (0, 0);
         }
 
-        // Load existing items for upsert
-        var existingItems = await db.CatalogItems.ToDictionaryAsync(c => c.ErpItemCode, cancellationToken);
+        // Wipe existing catalog with raw SQL (fast — avoids loading thousands of entities)
+        await db.Database.ExecuteSqlRawAsync("UPDATE InvoiceLines SET MatchedItemId = NULL, MatchConfidence = 0, MatchReason = 'catalog-reset' WHERE MatchedItemId IS NOT NULL", cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM SupplierItemMappings", cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM CatalogJobs", cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM CatalogItems", cancellationToken);
 
+        var existingItems = new Dictionary<string, CatalogItem>();
         int added = 0, updated = 0;
         while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
@@ -225,16 +317,14 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
 
             var uom = uomIdx >= 0 && uomIdx < parts.Count ? parts[uomIdx].Trim().Trim('"') : null;
             var tax = taxIdx >= 0 && taxIdx < parts.Count ? parts[taxIdx].Trim().Trim('"') : null;
-            var internalCode = internalCodeIdx >= 0 && internalCodeIdx < parts.Count ? parts[internalCodeIdx].Trim().Trim('"') : null;
 
             if (existingItems.TryGetValue(code, out var existing))
             {
-                if (existing.Name != name || existing.Uom != uom || existing.TaxCode != tax || existing.InternalCode != internalCode)
+                if (existing.Name != name || existing.Uom != uom || existing.TaxCode != tax)
                 {
                     existing.Name = name;
                     existing.Uom = string.IsNullOrWhiteSpace(uom) ? existing.Uom : uom;
                     existing.TaxCode = string.IsNullOrWhiteSpace(tax) ? existing.TaxCode : tax;
-                    existing.InternalCode = string.IsNullOrWhiteSpace(internalCode) ? existing.InternalCode : internalCode;
                     existing.Active = true;
                     updated++;
                 }
@@ -245,7 +335,6 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                 {
                     ErpItemCode = code,
                     Name = name,
-                    InternalCode = string.IsNullOrWhiteSpace(internalCode) ? null : internalCode,
                     Uom = string.IsNullOrWhiteSpace(uom) ? null : uom,
                     TaxCode = string.IsNullOrWhiteSpace(tax) ? null : tax,
                     Active = true

@@ -282,8 +282,9 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
                         // Exclude Kod PCN/CN lines and PCN codes (8-digit)
                         !w.Text.StartsWith("Kod") && w.Text != "PCN/CN:" &&
                         !Regex.IsMatch(w.Text, @"^\d{8}$") &&
-                        // Exclude variant markers
+                        // Exclude variant markers (I:, E:, L:) and their values (N9016M, LAN, MF, ZN, 3000, 9010)
                         !Regex.IsMatch(w.Text, @"^[IEL]:$") &&
+                        !IsVariantValue(w, tableWords) &&
                         // Exclude standalone prices in desc column
                         !(Regex.IsMatch(w.Text, @"^\d+[.,]\d+$") && w.BoundingBox.Left > cols.ItemMaxX * 0.3) &&
                         // Exclude percentage
@@ -317,6 +318,15 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             .OrderBy(w => Math.Abs(w.BoundingBox.Bottom - y))
             .Select(w => w.Text)
             .FirstOrDefault();
+    }
+
+    // Detects words that sit on the same Y as a variant marker (I:, E:, L:)
+    private static bool IsVariantValue(Word w, List<Word> allWords)
+    {
+        return allWords.Any(m =>
+            Regex.IsMatch(m.Text, @"^[IEL]:$") &&
+            Math.Abs(m.BoundingBox.Bottom - w.BoundingBox.Bottom) < 3 &&
+            m.Text != w.Text);
     }
 
     private static string? NormalizeUnit(string? unit) => unit?.ToUpperInvariant() switch

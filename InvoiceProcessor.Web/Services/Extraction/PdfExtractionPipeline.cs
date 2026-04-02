@@ -34,7 +34,7 @@ public class PdfExtractionPipeline(
     public async Task ProcessDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {
         var document = await db.Documents.Include(d => d.Supplier).FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
-        if (document is null || document.Status == DocumentStatus.Duplicate || document.Status == DocumentStatus.Posted) return;
+        if (document is null || document.Status is not (DocumentStatus.Received or DocumentStatus.Extracting)) return;
 
         document.Status = DocumentStatus.Extracting;
         await db.SaveChangesAsync(cancellationToken);
@@ -112,35 +112,33 @@ public class PdfExtractionPipeline(
                 logger.LogInformation("Used supplier extractor '{Extractor}' for document {DocumentId}",
                     matchedExtractor.SupplierKey, documentId);
 
-                // Second-pass: use extractor's supplier name to find/create/update supplier
+                // Second-pass: use extractor's supplier name to find or create the real supplier
                 if (invoice.Supplier is not null)
                 {
-                    if (document.SupplierId is null)
+                    // Always try to find the correct supplier by name from the extractor
+                    var correctSupplier = suppliers.FirstOrDefault(s =>
+                        s.Name.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase) ||
+                        s.AliasesJson.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase));
+
+                    if (correctSupplier is not null)
                     {
-                        supplier = suppliers.FirstOrDefault(s =>
-                            s.Name.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase) ||
-                            s.AliasesJson.Contains(invoice.Supplier, StringComparison.OrdinalIgnoreCase));
-                        if (supplier is not null)
-                        {
-                            document.SupplierId = supplier.Id;
-                        }
-                        else
-                        {
-                            supplier = new Supplier { Name = invoice.Supplier };
-                            db.Suppliers.Add(supplier);
-                            await db.SaveChangesAsync(cancellationToken);
-                            suppliers.Add(supplier);
-                            document.SupplierId = supplier.Id;
-                            logger.LogInformation("Auto-created supplier '{Name}' from extractor for document {DocumentId}",
-                                supplier.Name, documentId);
-                        }
+                        document.SupplierId = correctSupplier.Id;
+                        supplier = correctSupplier;
                     }
                     else if (supplier is not null && supplier.Name == supplier.VatNo)
                     {
-                        // Supplier was auto-created with VAT as name — update with real name from extractor
+                        // Supplier was auto-created with VAT as name — update with real name
                         supplier.Name = invoice.Supplier;
-                        logger.LogInformation("Updated supplier name from '{Vat}' to '{Name}' for document {DocumentId}",
-                            supplier.VatNo, invoice.Supplier, documentId);
+                    }
+                    else if (document.SupplierId is null)
+                    {
+                        supplier = new Supplier { Name = invoice.Supplier };
+                        db.Suppliers.Add(supplier);
+                        await db.SaveChangesAsync(cancellationToken);
+                        suppliers.Add(supplier);
+                        document.SupplierId = supplier.Id;
+                        logger.LogInformation("Auto-created supplier '{Name}' from extractor for document {DocumentId}",
+                            supplier.Name, documentId);
                     }
                 }
             }
