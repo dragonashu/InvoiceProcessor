@@ -301,7 +301,7 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             description = anchor.ItemCode;
 
         return new CanonicalInvoiceLine(
-            VendorItemCode: anchor.ItemCode,
+            CodIntern: anchor.ItemCode,
             DescriptionRaw: description,
             Qty: qty,
             Uom: NormalizeUnit(unit),

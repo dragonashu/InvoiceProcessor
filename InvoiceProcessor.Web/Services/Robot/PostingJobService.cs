@@ -11,7 +11,7 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
 {
     public async Task<IReadOnlyList<PostingJob>> CreatePostingJobsAsync(IReadOnlyList<Guid> documentIds, CancellationToken cancellationToken)
     {
-        var docs = await db.Documents.Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem).Include(d => d.ExtractArtifact).Where(d => documentIds.Contains(d.Id)).ToListAsync(cancellationToken);
+        var docs = await db.Documents.Include(d => d.Supplier).Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem).Include(d => d.ExtractArtifact).Where(d => documentIds.Contains(d.Id)).ToListAsync(cancellationToken);
         var batchId = Guid.NewGuid().ToString("N");
         var jobs = new List<PostingJob>();
 
@@ -26,6 +26,7 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
                 Guid.NewGuid(),
                 doc.Id,
                 doc.CorrelationId,
+                doc.Supplier?.ErpName ?? doc.Supplier?.Name,
                 canonical,
                 doc.InvoiceLines.OrderBy(l => l.LineNo).Select(l => new ReadyToPostLine(l.LineNo, l.Description, l.Qty, l.Uom, l.Amount, l.MatchedItem?.ErpItemCode, l.MatchedItem?.Name, l.MatchConfidence, l.MatchReason ?? string.Empty, l.WarehouseCode, l.CostCenterCode)).ToList());
 

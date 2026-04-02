@@ -11,7 +11,7 @@ public record CanonicalInvoice(
     IReadOnlyList<CanonicalInvoiceLine> Lines,
     CanonicalMetadata Metadata);
 
-public record CanonicalInvoiceLine(string? VendorItemCode, string DescriptionRaw, decimal Qty, string? Uom, decimal? UnitPrice, decimal LineTotal, string? Bare = null);
+public record CanonicalInvoiceLine(string? CodIntern, string DescriptionRaw, decimal Qty, string? Uom, decimal? UnitPrice, decimal LineTotal, string? Bare = null);
 
 public record CanonicalMaterialsList(
     string? JobReference,
@@ -22,7 +22,7 @@ public record CanonicalMaterialLine(string Description, decimal Qty, string? Uom
 
 public record CanonicalMetadata(decimal Confidence, string Strategy, string? Notes = null);
 
-public record ReadyToPostInvoicePayload(Guid PostingJobId, Guid DocumentId, string CorrelationId, CanonicalInvoice Invoice, IReadOnlyList<ReadyToPostLine> Lines);
+public record ReadyToPostInvoicePayload(Guid PostingJobId, Guid DocumentId, string CorrelationId, string? SupplierErpName, CanonicalInvoice Invoice, IReadOnlyList<ReadyToPostLine> Lines);
 public record ReadyToPostLine(int LineNo, string Description, decimal Qty, string? Uom, decimal Amount, string? ErpItemCode, string? ErpItemName, decimal Confidence, string Reason, string? WarehouseCode = null, string? CostCenterCode = null);
 
 public record RobotCompleteRequest(string Result, string? ErpDocNo, string? ErrorCategory, string? ErrorMessage, string? ResultJson);

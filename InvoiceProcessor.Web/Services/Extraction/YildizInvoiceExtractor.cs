@@ -160,7 +160,7 @@ public class YildizInvoiceExtractor : ISupplierInvoiceExtractor
                     fullDesc = $"Glass item {prodNo}";
 
                 allLines.Add(new CanonicalInvoiceLine(
-                    VendorItemCode: prodNo,
+                    CodIntern: prodNo,
                     DescriptionRaw: fullDesc,
                     Qty: numRow.Parsed.Value.Qty,
                     Uom: "Mp",

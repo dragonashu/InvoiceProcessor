@@ -128,7 +128,25 @@
             var id = row.dataset.id;
             var data = { erpItemCode: row.querySelector('.ni-erp').value, name: row.querySelector('.ni-name').value, uom: row.querySelector('.ni-uom').value };
             fetch('/ui/catalog/new-items/' + id + '/accept', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-                .then(function (r) { if (r.ok) { row.style.background = '#e6f9ed'; row.querySelector('td:last-child').innerHTML = '<span style="color:var(--c-success);font-weight:600;">Acceptat</span>'; } });
+                .then(function (r) {
+                    if (r.ok) {
+                        row.style.background = '#e6f9ed';
+                        row.style.transition = 'opacity 0.5s, transform 0.5s';
+                        row.querySelector('td:last-child').innerHTML = '<span style="color:var(--c-success);font-weight:600;">Acceptat</span>';
+                        setTimeout(function () {
+                            row.style.opacity = '0';
+                            row.style.transform = 'translateX(30px)';
+                            setTimeout(function () { row.remove(); updateNewItemsCount(); }, 500);
+                        }, 600);
+                    }
+                });
+        }
+
+        function updateNewItemsCount() {
+            var remaining = document.querySelectorAll('#newItemsBody tr[data-id]').length;
+            if (remaining === 0) {
+                document.getElementById('newItemsBody').innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--c-text-muted); padding:12px;">Toate articolele au fost procesate.</td></tr>';
+            }
         }
 
         var _pdfModalRow = null;
@@ -158,11 +176,15 @@
             fetch('/ui/catalog/new-items/' + id + '/accept', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
                 .then(function (r) {
                     if (r.ok && _pdfModalRow) {
-                        _pdfModalRow.querySelector('.ni-erp').value = data.erpItemCode;
-                        _pdfModalRow.querySelector('.ni-name').value = data.name;
-                        _pdfModalRow.querySelector('.ni-uom').value = data.uom;
                         _pdfModalRow.style.background = '#e6f9ed';
+                        _pdfModalRow.style.transition = 'opacity 0.5s, transform 0.5s';
                         _pdfModalRow.querySelector('td:last-child').innerHTML = '<span style="color:var(--c-success);font-weight:600;">Acceptat</span>';
+                        var row = _pdfModalRow;
+                        setTimeout(function () {
+                            row.style.opacity = '0';
+                            row.style.transform = 'translateX(30px)';
+                            setTimeout(function () { row.remove(); updateNewItemsCount(); }, 500);
+                        }, 400);
                     }
                     closePdfModal();
                 });

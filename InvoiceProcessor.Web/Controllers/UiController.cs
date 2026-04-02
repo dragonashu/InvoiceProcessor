@@ -224,7 +224,7 @@ public class UiController(AppDbContext db, IPostingJobService postingJobService)
         item.ErpItemCode = request.ErpItemCode;
         item.Name = request.Name;
         item.Uom = request.Uom;
-        // Keep IsAutoCreated = true until the robot confirms creation in ERP
+        item.IsAutoCreated = false; // accepted — hide from proposed list immediately
 
         // Create a catalog job for the robot to process
         var payload = new CatalogItemPayload(Guid.NewGuid(), item.Id, item.ErpItemCode, item.Name, item.Uom);

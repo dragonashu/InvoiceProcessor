@@ -198,7 +198,7 @@ public class CortizoInvoiceExtractor : ISupplierInvoiceExtractor
         return allRows
             .OrderBy(r => r.LineNo)
             .Select(r => new CanonicalInvoiceLine(
-                VendorItemCode: r.CodRef,
+                CodIntern: r.CodRef,
                 DescriptionRaw: r.Description,
                 Qty: r.Cantitate,
                 Uom: r.Unit ?? "MTS",

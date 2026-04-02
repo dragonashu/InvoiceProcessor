@@ -85,7 +85,7 @@
                             var erpCode = matchItem?.ErpItemCode;
                             <tr>
                                 <td>@lineNo</td>
-                                <td style="font-family: var(--font-mono); font-size: 12px; font-weight: 600;">@(line.VendorItemCode ?? "-")</td>
+                                <td style="font-family: var(--font-mono); font-size: 12px; font-weight: 600;">@(line.CodIntern ?? "-")</td>
                                 <td class="desc-col" style="display:none; font-size: 12px;">@line.DescriptionRaw</td>
                                 <td style="font-family: var(--font-mono); font-size: 12px; font-weight: 600; @matchCss">@(erpCode ?? "-")</td>
                                 <td class="desc-col" style="display:none; font-size: 12px; @matchCss">@(matchItem?.Name ?? "-")</td>

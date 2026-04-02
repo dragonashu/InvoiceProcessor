@@ -53,9 +53,9 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
             string reason = "no-match";
 
             // Tier 1: Exact vendor code mapping (from SupplierItemMappings)
-            if (!string.IsNullOrWhiteSpace(line.VendorItemCode))
+            if (!string.IsNullOrWhiteSpace(line.CodIntern))
             {
-                var mapping = mappings.FirstOrDefault(m => m.VendorCode == line.VendorItemCode);
+                var mapping = mappings.FirstOrDefault(m => m.VendorCode == line.CodIntern);
                 if (mapping is not null)
                 {
                     matched = mapping.CatalogItem;
@@ -64,10 +64,10 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                 }
             }
 
-            // Tier 2: CODE-FIRST - match VendorItemCode against catalog ErpItemCode (= Cod Intern)
-            if (matched is null && !string.IsNullOrWhiteSpace(line.VendorItemCode))
+            // Tier 2: CODE-FIRST - match CodIntern against catalog ErpItemCode (= Cod Intern)
+            if (matched is null && !string.IsNullOrWhiteSpace(line.CodIntern))
             {
-                var normalizedVendor = NormalizeCode(line.VendorItemCode);
+                var normalizedVendor = NormalizeCode(line.CodIntern);
                 if (catalogByCode.TryGetValue(normalizedVendor, out var codeMatches))
                 {
                     // If multiple items share the same code, pick the best by description similarity
@@ -78,8 +78,8 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                 else
                 {
                     // Try partial: strip variant suffix (e.g., ACFA501/LAN -> ACFA501)
-                    var baseCode = line.VendorItemCode.Contains('/')
-                        ? NormalizeCode(line.VendorItemCode.Split('/')[0])
+                    var baseCode = line.CodIntern.Contains('/')
+                        ? NormalizeCode(line.CodIntern.Split('/')[0])
                         : null;
                     if (baseCode != null)
                     {
@@ -99,13 +99,13 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                 // Auto-learn mapping for future
                 if (matched != null && document.SupplierId.HasValue)
                 {
-                    var existingMapping = mappings.FirstOrDefault(m => m.VendorCode == line.VendorItemCode);
+                    var existingMapping = mappings.FirstOrDefault(m => m.VendorCode == line.CodIntern);
                     if (existingMapping is null)
                     {
                         var newMapping = new SupplierItemMapping
                         {
                             SupplierId = document.SupplierId.Value,
-                            VendorCode = line.VendorItemCode,
+                            VendorCode = line.CodIntern,
                             CatalogItemId = matched.Id
                         };
                         db.SupplierItemMappings.Add(newMapping);
@@ -139,15 +139,15 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
                     confidence = Math.Min(0.95m, bestScore);
                     reason = $"token-match({bestScore:F2})";
 
-                    if (bestScore >= 0.85m && !string.IsNullOrWhiteSpace(line.VendorItemCode) && document.SupplierId.HasValue)
+                    if (bestScore >= 0.85m && !string.IsNullOrWhiteSpace(line.CodIntern) && document.SupplierId.HasValue)
                     {
-                        var existingMapping = mappings.FirstOrDefault(m => m.VendorCode == line.VendorItemCode);
+                        var existingMapping = mappings.FirstOrDefault(m => m.VendorCode == line.CodIntern);
                         if (existingMapping is null)
                         {
                             var newMapping = new SupplierItemMapping
                             {
                                 SupplierId = document.SupplierId.Value,
-                                VendorCode = line.VendorItemCode,
+                                VendorCode = line.CodIntern,
                                 CatalogItemId = bestItem.Id
                             };
                             db.SupplierItemMappings.Add(newMapping);
@@ -158,23 +158,35 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
             }
 
             // Tier 4: AUTO-CREATE — no match found, create a new catalog item
-            // Use VendorItemCode as key if available, otherwise derive key from description
+            // Use CodIntern as key if available, otherwise derive key from description
             if (matched is null)
             {
-                var itemKey = !string.IsNullOrWhiteSpace(line.VendorItemCode)
-                    ? line.VendorItemCode
+                var itemKey = !string.IsNullOrWhiteSpace(line.CodIntern)
+                    ? line.CodIntern
                     : GenerateDescriptionKey(line.DescriptionRaw);
 
                 if (!string.IsNullOrWhiteSpace(itemKey))
                 {
                     var normalizedKey = NormalizeCode(itemKey);
 
-                    // Check if this code already exists in catalog (from prior run or this batch)
+                    // Check if this code already exists in catalog (active OR inactive)
                     var alreadyExists = catalog.FirstOrDefault(c =>
                         NormalizeCode(c.ErpItemCode) == normalizedKey);
 
+                    // Also check the DB for inactive/rejected items not in memory
+                    alreadyExists ??= await db.CatalogItems.FirstOrDefaultAsync(c =>
+                        c.ErpItemCode == itemKey, cancellationToken);
+
                     if (alreadyExists != null)
                     {
+                        // Reactivate if it was rejected
+                        if (!alreadyExists.Active)
+                        {
+                            alreadyExists.Active = true;
+                            alreadyExists.IsAutoCreated = true;
+                            alreadyExists.AutoCreatedAt = DateTime.UtcNow;
+                            if (!catalog.Contains(alreadyExists)) catalog.Add(alreadyExists);
+                        }
                         matched = alreadyExists;
                     }
                     else
@@ -204,7 +216,7 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
             {
                 DocumentId = documentId,
                 LineNo = lineNo++,
-                VendorCode = line.VendorItemCode,
+                VendorCode = line.CodIntern,
                 Description = line.DescriptionRaw,
                 Qty = line.Qty,
                 Uom = line.Uom,

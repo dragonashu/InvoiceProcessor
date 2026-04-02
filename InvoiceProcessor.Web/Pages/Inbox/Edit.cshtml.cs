@@ -31,7 +31,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
 
     public class EditLineInput
     {
-        public string? VendorItemCode { get; set; }
+        public string? CodIntern { get; set; }
         public string DescriptionRaw { get; set; } = "";
         public decimal Qty { get; set; }
         public string? Uom { get; set; }
@@ -76,7 +76,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
                     MatchedLines.TryGetValue(lineIdx, out var ml);
                     return new EditLineInput
                     {
-                        VendorItemCode = l.VendorItemCode,
+                        CodIntern = l.CodIntern,
                         DescriptionRaw = l.DescriptionRaw,
                         Qty = l.Qty,
                         Uom = l.Uom,
@@ -111,7 +111,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
             Supplier, InvoiceNo, parsedDate, Currency,
             NetTotal, VatTotal, GrossTotal,
             Lines.Select(l => new CanonicalInvoiceLine(
-                l.VendorItemCode, l.DescriptionRaw, l.Qty, l.Uom, l.UnitPrice, l.LineTotal, l.Bare
+                l.CodIntern, l.DescriptionRaw, l.Qty, l.Uom, l.UnitPrice, l.LineTotal, l.Bare
             )).ToList(),
             new CanonicalMetadata(
                 existingInvoice?.Metadata?.Confidence ?? doc.Confidence,
