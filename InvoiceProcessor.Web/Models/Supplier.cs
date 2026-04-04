@@ -13,4 +13,5 @@ public class Supplier
 
     /// <summary>Returns ErpName if set, otherwise falls back to Name.</summary>
     public string DisplayName => ErpName ?? Name;
+    public bool IsImportSupplier => Country is not null && !Country.Equals("RO", StringComparison.OrdinalIgnoreCase);
 }

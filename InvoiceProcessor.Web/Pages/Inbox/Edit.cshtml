@@ -76,6 +76,21 @@
                 <div class="field"><div class="field-label">Moneda</div><input type="text" name="Currency" value="@Model.Currency" class="form-input" /></div>
                 <div class="field"><div class="field-label">Total net</div><input type="number" step="0.01" name="NetTotal" value="@Model.NetTotal" class="form-input form-input-num" id="netTotalInput" /></div>
                 <div class="field"><div class="field-label">Total brut</div><input type="number" step="0.01" name="GrossTotal" value="@Model.GrossTotal" class="form-input form-input-num" id="grossTotalInput" /></div>
+                <div class="field">
+                    <div class="field-label">Tip tranzactie</div>
+                    <select name="IsImport" class="form-input">
+                        @if (Model.IsImport)
+                        {
+                            <option value="false">Local (Romania)</option>
+                            <option value="true" selected>Import (intra-comunitar)</option>
+                        }
+                        else
+                        {
+                            <option value="false" selected>Local (Romania)</option>
+                            <option value="true">Import (intra-comunitar)</option>
+                        }
+                    </select>
+                </div>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">

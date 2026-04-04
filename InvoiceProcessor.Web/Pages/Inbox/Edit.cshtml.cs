@@ -27,6 +27,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
     [BindProperty] public decimal? NetTotal { get; set; }
     [BindProperty] public decimal? VatTotal { get; set; }
     [BindProperty] public decimal? GrossTotal { get; set; }
+    [BindProperty] public bool IsImport { get; set; }
     [BindProperty] public List<EditLineInput> Lines { get; set; } = [];
 
     public class EditLineInput
@@ -66,6 +67,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
                 InvoiceNo = inv.InvoiceNo;
                 InvoiceDate = inv.InvoiceDate?.ToString("yyyy-MM-dd");
                 Currency = inv.Currency;
+                IsImport = doc.IsImport;
                 NetTotal = inv.NetTotal;
                 VatTotal = inv.VatTotal;
                 GrossTotal = inv.GrossTotal;
@@ -124,6 +126,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
         doc.InvoiceNo = InvoiceNo;
         doc.InvoiceDate = parsedDate;
         doc.GrossTotal = GrossTotal;
+        doc.IsImport = IsImport;
 
         // Re-run matching
         await matchingEngine.MatchInvoiceLinesAsync(doc.Id, canonical, cancellationToken);

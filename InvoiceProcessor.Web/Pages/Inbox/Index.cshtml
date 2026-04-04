@@ -269,7 +269,16 @@ else
                                 <td style="font-weight:600;">@(doc.InvoiceNo ?? doc.Filename)</td>
                                 <td>@doc.InvoiceDate?.ToString("dd/MM/yyyy")</td>
                                 <td class="num">@doc.GrossTotal?.ToString("N2")</td>
-                                <td><span class="badge status-processing">@doc.DocType</span></td>
+                                <td>
+                                    @if (doc.IsImport)
+                                    {
+                                        <span class="badge" style="background:#fef3e2; color:#b45309; border:1px solid #f59e0b;">Import</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge" style="background:#e0f2fe; color:#0369a1;">Local</span>
+                                    }
+                                </td>
                                 <td><span class="badge @IndexModel.StatusCssClass(doc.Status)">@IndexModel.StatusDisplayName(doc.Status)</span></td>
                                 @{ var stats = IndexModel.GetMatchStats(doc); }
                                 <td class="num" style="@(stats.total == 0 ? "color: var(--c-text-muted);" : stats.matched == stats.total ? "color: var(--c-success); font-weight: 600;" : "color: var(--c-warning); font-weight: 600;")">

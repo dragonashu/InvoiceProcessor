@@ -12,8 +12,11 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
     public async Task<IReadOnlyList<PostingJob>> CreatePostingJobsAsync(IReadOnlyList<Guid> documentIds, CancellationToken cancellationToken)
     {
         var docs = await db.Documents.Include(d => d.Supplier).Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem).Include(d => d.ExtractArtifact).Where(d => documentIds.Contains(d.Id)).ToListAsync(cancellationToken);
-        var batchId = Guid.NewGuid().ToString("N");
         var jobs = new List<PostingJob>();
+
+        // Separate batches: one for import, one for local
+        var importBatchId = Guid.NewGuid().ToString("N");
+        var localBatchId = Guid.NewGuid().ToString("N");
 
         foreach (var doc in docs)
         {
@@ -27,14 +30,18 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
                 doc.Id,
                 doc.CorrelationId,
                 doc.Supplier?.ErpName ?? doc.Supplier?.Name,
-                canonical,
+                doc.IsImport,
+                canonical.InvoiceNo,
+                canonical.InvoiceDate,
+                canonical.Currency,
+                canonical.GrossTotal,
                 doc.InvoiceLines.OrderBy(l => l.LineNo).Select(l => new ReadyToPostLine(l.LineNo, l.Description, l.Qty, l.Uom, l.Amount, l.MatchedItem?.ErpItemCode, l.MatchedItem?.Name, l.MatchConfidence, l.MatchReason ?? string.Empty, l.WarehouseCode, l.CostCenterCode)).ToList());
 
             var job = new PostingJob
             {
                 Id = payload.PostingJobId,
                 DocumentId = doc.Id,
-                BatchId = batchId,
+                BatchId = doc.IsImport ? importBatchId : localBatchId,
                 Status = PostingJobStatus.Queued,
                 RequestJson = JsonSerializer.Serialize(payload)
             };
@@ -43,16 +50,15 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
             doc.Status = DocumentStatus.Posting;
             db.PostingJobs.Add(job);
 
-            // Learn: save vendor code -> catalog item mappings for matched lines
             if (doc.SupplierId.HasValue)
                 await LearnMappingsAsync(doc.SupplierId.Value, doc.InvoiceLines, cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);
-        if (jobs.Count > 0)
-        {
-            await orchestratorClient.TriggerProcessAsync(batchId, cancellationToken);
-        }
+        if (jobs.Any(j => j.BatchId == importBatchId))
+            await orchestratorClient.TriggerProcessAsync(importBatchId, cancellationToken);
+        if (jobs.Any(j => j.BatchId == localBatchId))
+            await orchestratorClient.TriggerProcessAsync(localBatchId, cancellationToken);
         return jobs;
     }
 

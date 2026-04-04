@@ -157,6 +157,7 @@ public class PdfExtractionPipeline(
                     : parser.ParseInvoiceJson(text, strategy);
             }
 
+            document.IsImport = supplier?.IsImportSupplier ?? false;
             document.Status = DocumentStatus.Parsed;
             await SaveArtifact(document.Id, JsonSerializer.Serialize(new { textLength = text.Length, head = text[..Math.Min(500, text.Length)] }), canonical, cancellationToken);
 

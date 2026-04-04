@@ -20,6 +20,7 @@ public class Document
     public string? InvoiceNo { get; set; }
     public DateOnly? InvoiceDate { get; set; }
     public decimal? GrossTotal { get; set; }
+    public bool IsImport { get; set; }
     public string CorrelationId { get; set; } = Guid.NewGuid().ToString("N");
     public ExtractArtifact? ExtractArtifact { get; set; }
     public ICollection<InvoiceLine> InvoiceLines { get; set; } = [];
