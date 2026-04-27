@@ -48,48 +48,147 @@
 }
 else
 {
-    <div class="card status-table-wrap">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Job ID</th>
-                    <th>Furnizor</th>
-                    <th>Nr. factura</th>
-                    <th>Stare</th>
-                    <th>Doc. ERP</th>
-                    <th>Eroare</th>
-                    <th>Creat</th>
-                    <th>Finalizat</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var job in Model.Jobs)
-                {
+    @* ---- Active jobs ---- *@
+    @if (Model.ActiveJobs.Count > 0)
+    {
+        <h3 style="margin-bottom: 12px; font-size: 15px; color: var(--c-text-secondary);">
+            Joburi active
+            <span class="badge status-processing" style="margin-left: 8px;">@Model.ActiveJobs.Count</span>
+        </h3>
+        <div class="card status-table-wrap" style="margin-bottom: 24px;">
+            <table class="data-table">
+                <thead>
                     <tr>
-                        <td style="font-family: var(--font-mono); font-size: 11px; color: var(--c-text-muted); max-width: 90px; overflow: hidden; text-overflow: ellipsis;" title="@job.Id">@job.Id.ToString()[..8]</td>
-                        <td style="font-weight: 600;">@(job.Document.Supplier?.DisplayName ?? "Necunoscut")</td>
-                        <td style="font-family: var(--font-mono); font-size: 13px;">@job.Document.InvoiceNo</td>
-                        <td><span class="badge @StatusBadge(job.Status)">@PostingStatusName(job.Status)</span></td>
-                        <td style="font-family: var(--font-mono); font-size: 13px;">@job.ErpDocNo</td>
-                        <td>
-                            @if (!string.IsNullOrEmpty(job.ErrorCategory))
-                            {
-                                <span style="color: var(--c-danger); font-size: 13px;">@job.ErrorCategory: @job.ErrorMessage</span>
-                            }
-                        </td>
-                        <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
-                        <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CompletedAt?.ToString("dd/MM/yyyy HH:mm")</td>
-                        <td>
-                            <span class="row-actions">
-                                <a href="/Inbox/Preview/@job.DocumentId">Previzualizare</a>
-                            </span>
-                        </td>
+                        <th>Job ID</th>
+                        <th>Furnizor</th>
+                        <th>Nr. factura</th>
+                        <th>Stare</th>
+                        <th>Doc. ERP</th>
+                        <th>Eroare</th>
+                        <th>Creat</th>
+                        <th></th>
                     </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    @foreach (var job in Model.ActiveJobs)
+                    {
+                        <tr>
+                            <td style="font-family: var(--font-mono); font-size: 11px; color: var(--c-text-muted); max-width: 90px; overflow: hidden; text-overflow: ellipsis;" title="@job.Id">@job.Id.ToString()[..8]</td>
+                            <td style="font-weight: 600;">@(job.Document.Supplier?.DisplayName ?? "Necunoscut")</td>
+                            <td style="font-family: var(--font-mono); font-size: 13px;">@job.Document.InvoiceNo</td>
+                            <td><span class="badge @StatusBadge(job.Status)">@PostingStatusName(job.Status)</span></td>
+                            <td style="font-family: var(--font-mono); font-size: 13px;">@job.ErpDocNo</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(job.ErrorCategory))
+                                {
+                                    <span style="color: var(--c-danger); font-size: 13px;">@job.ErrorCategory: @job.ErrorMessage</span>
+                                }
+                            </td>
+                            <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                <span class="row-actions">
+                                    <a href="/Inbox/Preview/@job.DocumentId">Previzualizare</a>
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (Model.FinalizedJobs.Count > 0)
+    {
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="empty-state" style="padding: 24px;">
+                <p style="color: var(--c-text-muted);">Niciun job activ. Toate joburile sunt finalizate.</p>
+            </div>
+        </div>
+    }
+
+    @* ---- Finalized jobs (collapsible) ---- *@
+    @if (Model.FinalizedJobs.Count > 0)
+    {
+        <details class="supplier-group" id="finalizedSection">
+            <summary class="supplier-header">
+                <svg class="supplier-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                <span class="supplier-name">Finalizate</span>
+                <span class="badge status-ready" style="margin-left: 4px;">@Model.FinalizedJobs.Count</span>
+                <span class="supplier-counts">
+                    <span class="count-total" style="color: var(--c-text-muted); font-size: 13px;">
+                        @Model.FinalizedJobs.Count(j => j.Status == InvoiceProcessor.Web.Enums.PostingJobStatus.Success) finalizat,
+                        @Model.FinalizedJobs.Count(j => j.Status == InvoiceProcessor.Web.Enums.PostingJobStatus.Partial) partial
+                    </span>
+                </span>
+            </summary>
+            <div style="padding: 0 20px 16px;">
+                <div style="margin-bottom: 12px;">
+                    <input type="text" id="finalizedSearch" placeholder="Cauta dupa furnizor, factura, doc ERP..."
+                           style="width: 100%; max-width: 400px; padding: 8px 12px; border: 1px solid var(--c-border); border-radius: var(--radius); font-size: 13px; outline: none; transition: border-color 0.15s;"
+                           onfocus="this.style.borderColor='var(--c-primary)'" onblur="this.style.borderColor='var(--c-border)'" />
+                </div>
+                <div class="status-table-wrap">
+                    <table class="data-table" id="finalizedTable">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Furnizor</th>
+                                <th>Nr. factura</th>
+                                <th>Stare</th>
+                                <th>Doc. ERP</th>
+                                <th>Eroare</th>
+                                <th>Creat</th>
+                                <th>Finalizat</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var job in Model.FinalizedJobs)
+                            {
+                                <tr>
+                                    <td style="font-family: var(--font-mono); font-size: 11px; color: var(--c-text-muted); max-width: 90px; overflow: hidden; text-overflow: ellipsis;" title="@job.Id">@job.Id.ToString()[..8]</td>
+                                    <td style="font-weight: 600;">@(job.Document.Supplier?.DisplayName ?? "Necunoscut")</td>
+                                    <td style="font-family: var(--font-mono); font-size: 13px;">@job.Document.InvoiceNo</td>
+                                    <td><span class="badge @StatusBadge(job.Status)">@PostingStatusName(job.Status)</span></td>
+                                    <td style="font-family: var(--font-mono); font-size: 13px;">@job.ErpDocNo</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(job.ErrorCategory))
+                                        {
+                                            <span style="color: var(--c-danger); font-size: 13px;">@job.ErrorCategory: @job.ErrorMessage</span>
+                                        }
+                                    </td>
+                                    <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td style="font-size: 13px; color: var(--c-text-secondary);">@job.CompletedAt?.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        <span class="row-actions">
+                                            <a href="/Inbox/Preview/@job.DocumentId">Previzualizare</a>
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div id="finalizedNoResults" style="display: none; text-align: center; padding: 16px; color: var(--c-text-muted); font-size: 13px;">
+                    Niciun rezultat gasit.
+                </div>
+            </div>
+        </details>
+
+        <script>
+            document.getElementById('finalizedSearch')?.addEventListener('input', function () {
+                const query = this.value.toLowerCase().trim();
+                const rows = document.querySelectorAll('#finalizedTable tbody tr');
+                let visible = 0;
+                rows.forEach(function (row) {
+                    const text = row.textContent.toLowerCase();
+                    const match = !query || text.includes(query);
+                    row.style.display = match ? '' : 'none';
+                    if (match) visible++;
+                });
+                document.getElementById('finalizedNoResults').style.display = visible === 0 ? '' : 'none';
+            });
+        </script>
+    }
 }
 
 @functions {

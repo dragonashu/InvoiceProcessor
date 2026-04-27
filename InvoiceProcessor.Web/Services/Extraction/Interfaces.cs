@@ -6,6 +6,7 @@ public interface IExtractionPipeline
 {
     Task ProcessDocumentAsync(Guid documentId, CancellationToken cancellationToken);
     Task ProcessPendingAsync(CancellationToken cancellationToken);
+    Task ReextractDocumentAsync(Guid documentId, CancellationToken cancellationToken);
 }
 
 public interface IDocumentClassifier

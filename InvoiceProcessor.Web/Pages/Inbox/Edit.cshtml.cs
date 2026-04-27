@@ -28,6 +28,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
     [BindProperty] public decimal? VatTotal { get; set; }
     [BindProperty] public decimal? GrossTotal { get; set; }
     [BindProperty] public bool IsImport { get; set; }
+    [BindProperty] public string? HeaderWarehouseCode { get; set; }
     [BindProperty] public List<EditLineInput> Lines { get; set; } = [];
 
     public class EditLineInput
@@ -47,6 +48,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
     {
         var doc = await db.Documents.Include(d => d.Supplier)
             .Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem)
+            .Include(d => d.CustomsDeclaration)
             .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
         if (doc is null) return NotFound();
 
@@ -56,6 +58,8 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
         Doc = doc;
         MatchedLines = doc.InvoiceLines.ToDictionary(l => l.LineNo);
         Message = message;
+        IsImport = doc.IsImport;
+        HeaderWarehouseCode = doc.WarehouseCode;
 
         var artifact = await db.ExtractArtifacts.FirstOrDefaultAsync(a => a.DocumentId == id, cancellationToken);
         if (artifact is not null)
@@ -67,7 +71,6 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
                 InvoiceNo = inv.InvoiceNo;
                 InvoiceDate = inv.InvoiceDate?.ToString("yyyy-MM-dd");
                 Currency = inv.Currency;
-                IsImport = doc.IsImport;
                 NetTotal = inv.NetTotal;
                 VatTotal = inv.VatTotal;
                 GrossTotal = inv.GrossTotal;
@@ -127,6 +130,7 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
         doc.InvoiceDate = parsedDate;
         doc.GrossTotal = GrossTotal;
         doc.IsImport = IsImport;
+        doc.WarehouseCode = string.IsNullOrWhiteSpace(HeaderWarehouseCode) ? null : HeaderWarehouseCode;
 
         // Re-run matching
         await matchingEngine.MatchInvoiceLinesAsync(doc.Id, canonical, cancellationToken);

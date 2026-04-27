@@ -16,6 +16,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<CostCenter> CostCenters => Set<CostCenter>();
     public DbSet<CatalogJob> CatalogJobs => Set<CatalogJob>();
+    public DbSet<ItemClass> ItemClasses => Set<ItemClass>();
+    public DbSet<CustomsDeclaration> CustomsDeclarations => Set<CustomsDeclaration>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -23,7 +25,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Document>().HasIndex(x => new { x.SupplierId, x.InvoiceNo, x.InvoiceDate, x.GrossTotal });
         modelBuilder.Entity<ExtractArtifact>().HasIndex(x => x.DocumentId).IsUnique();
         modelBuilder.Entity<PostingJob>().HasIndex(x => new { x.DocumentId, x.Status });
-        modelBuilder.Entity<CatalogItem>().HasIndex(x => x.ErpItemCode).IsUnique();
+        // Filtered unique — ErpItemCode "default" is a placeholder for Yildiz proposals
+        // (ERP generates the real code), so multiple rows may share it.
+        modelBuilder.Entity<CatalogItem>()
+            .HasIndex(x => x.ErpItemCode)
+            .IsUnique()
+            .HasFilter("\"ErpItemCode\" <> 'default'");
         modelBuilder.Entity<CatalogJob>().HasIndex(x => new { x.CatalogItemId, x.Status });
         modelBuilder.Entity<CatalogJob>()
             .HasOne(j => j.CatalogItem)
@@ -32,6 +39,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<Warehouse>().HasIndex(x => x.Code).IsUnique();
         modelBuilder.Entity<CostCenter>().HasIndex(x => x.Code).IsUnique();
+        modelBuilder.Entity<ItemClass>().HasIndex(x => x.Name).IsUnique();
 
         modelBuilder.Entity<Document>()
             .HasOne(d => d.ExtractArtifact)

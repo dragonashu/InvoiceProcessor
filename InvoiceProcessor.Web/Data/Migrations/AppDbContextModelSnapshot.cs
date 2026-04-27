@@ -54,6 +54,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Active")
                         .HasColumnType("INTEGER");
 
@@ -80,7 +83,8 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ErpItemCode")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"ErpItemCode\" <> 'default'");
 
                     b.ToTable("CatalogItems");
                 });
@@ -155,6 +159,33 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.ToTable("CostCenters");
                 });
 
+            modelBuilder.Entity("InvoiceProcessor.Web.Models.ItemClass", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Level")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Symbol")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ItemClasses");
+                });
+
             modelBuilder.Entity("InvoiceProcessor.Web.Models.Document", b =>
                 {
                     b.Property<Guid>("Id")
@@ -196,6 +227,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.Property<bool>("IsImport")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("WarehouseCode")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("PdfHash")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -214,6 +248,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.Property<Guid?>("SupplierId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("CustomsDeclarationId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PdfHash")
@@ -221,7 +258,46 @@ namespace InvoiceProcessor.Web.Data.Migrations
 
                     b.HasIndex("SupplierId", "InvoiceNo", "InvoiceDate", "GrossTotal");
 
+                    b.HasIndex("CustomsDeclarationId");
+
                     b.ToTable("Documents");
+                });
+
+            modelBuilder.Entity("InvoiceProcessor.Web.Models.CustomsDeclaration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Filename")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InvoiceRef")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Lrn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Mrn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("ReleaseDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CustomsDeclarations");
                 });
 
             modelBuilder.Entity("InvoiceProcessor.Web.Models.ExtractArtifact", b =>
@@ -271,6 +347,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.Property<Guid>("DocumentId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExternalCode")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("LineNo")
                         .HasColumnType("INTEGER");
 
@@ -281,6 +360,9 @@ namespace InvoiceProcessor.Web.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("MatchedItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PropertyClass")
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("Qty")
@@ -374,9 +456,18 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.Property<string>("ErpName")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("InvoiceType")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("TaxationType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TransactionType")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("VatNo")
                         .HasColumnType("TEXT");
@@ -466,6 +557,13 @@ namespace InvoiceProcessor.Web.Data.Migrations
                     b.HasOne("InvoiceProcessor.Web.Models.Supplier", "Supplier")
                         .WithMany("Documents")
                         .HasForeignKey("SupplierId");
+
+                    b.HasOne("InvoiceProcessor.Web.Models.CustomsDeclaration", "CustomsDeclaration")
+                        .WithMany()
+                        .HasForeignKey("CustomsDeclarationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CustomsDeclaration");
 
                     b.Navigation("Supplier");
                 });

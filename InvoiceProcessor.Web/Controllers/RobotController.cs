@@ -22,20 +22,31 @@ public class RobotController(IPostingJobService postingJobService, AppDbContext 
 
         var jobs = await postingJobService.ListJobsAsync(parsed, Math.Clamp(limit, 1, 200), cancellationToken);
 
-        return Ok(jobs.Select(j => new
+        return Ok(jobs.Select(j =>
         {
-            j.Id,
-            j.DocumentId,
-            j.BatchId,
-            Status = j.Status.ToString(),
-            j.CreatedAt,
-            j.ClaimedAt,
-            j.CompletedAt,
-            j.ErpDocNo,
-            j.ErrorCategory,
-            j.ErrorMessage,
-            DocumentCorrelationId = j.Document?.CorrelationId,
-            DocumentSupplier = j.Document?.Supplier?.DisplayName
+            var payload = JsonSerializer.Deserialize<ReadyToPostInvoicePayload>(j.RequestJson);
+            return new
+            {
+                j.Id,
+                j.DocumentId,
+                j.BatchId,
+                Status = j.Status.ToString(),
+                j.CreatedAt,
+                j.ClaimedAt,
+                j.CompletedAt,
+                j.ErpDocNo,
+                j.ErrorCategory,
+                j.ErrorMessage,
+                DocumentCorrelationId = j.Document?.CorrelationId,
+                DocumentSupplier = j.Document?.Supplier?.DisplayName,
+                Currency = payload?.Currency,
+                TransactionType = payload?.TransactionType,
+                WarehouseCode = payload?.WarehouseCode,
+                CustomsMrn = payload?.CustomsMrn,
+                CustomsLrn = payload?.CustomsLrn,
+                CustomsExchangeRate = payload?.CustomsExchangeRate,
+                CustomsReleaseDate = payload?.CustomsReleaseDate
+            };
         }));
     }
 
@@ -52,6 +63,7 @@ public class RobotController(IPostingJobService postingJobService, AppDbContext 
         var job = await postingJobService.GetJobAsync(id, cancellationToken);
         if (job is null) return NotFound();
 
+        var payload = JsonSerializer.Deserialize<ReadyToPostInvoicePayload>(job.RequestJson);
         return Ok(new
         {
             job.Id,
@@ -64,6 +76,13 @@ public class RobotController(IPostingJobService postingJobService, AppDbContext 
             job.ErpDocNo,
             job.ErrorCategory,
             job.ErrorMessage,
+            Currency = payload?.Currency,
+            TransactionType = payload?.TransactionType,
+            WarehouseCode = payload?.WarehouseCode,
+            CustomsMrn = payload?.CustomsMrn,
+            CustomsLrn = payload?.CustomsLrn,
+            CustomsExchangeRate = payload?.CustomsExchangeRate,
+            CustomsReleaseDate = payload?.CustomsReleaseDate,
             job.RequestJson,
             job.ResultJson
         });
@@ -92,11 +111,16 @@ public class RobotController(IPostingJobService postingJobService, AppDbContext 
         if (status is not null && Enum.TryParse<CatalogJobStatus>(status, true, out var s))
             query = query.Where(j => j.Status == s);
         var jobs = await query.OrderBy(j => j.CreatedAt).Take(Math.Clamp(limit, 1, 200)).ToListAsync(cancellationToken);
-        return Ok(jobs.Select(j => new
+        return Ok(jobs.Select(j =>
         {
-            j.Id, j.CatalogItemId, j.BatchId, Status = j.Status.ToString(),
-            j.CreatedAt, j.ClaimedAt, j.CompletedAt, j.ErpItemCode, j.ErrorMessage,
-            ItemCode = j.CatalogItem?.ErpItemCode, ItemName = j.CatalogItem?.Name, ItemUom = j.CatalogItem?.Uom
+            var p = JsonSerializer.Deserialize<CatalogItemPayload>(j.RequestJson);
+            return new
+            {
+                j.Id, j.CatalogItemId, j.BatchId, Status = j.Status.ToString(),
+                j.CreatedAt, j.ClaimedAt, j.CompletedAt, j.ErpItemCode, j.ErrorMessage,
+                ItemCode = j.CatalogItem?.ErpItemCode, ItemName = j.CatalogItem?.Name, ItemUom = j.CatalogItem?.Uom,
+                p?.ExternalCode, p?.PropertyClass
+            };
         }));
     }
 

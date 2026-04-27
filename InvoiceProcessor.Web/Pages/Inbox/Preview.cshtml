@@ -1,6 +1,12 @@
 @page "/Inbox/Preview/{id:guid}"
 @model InvoiceProcessor.Web.Pages.Inbox.PreviewModel
 
+<style>
+    .lines-scroll { overflow-x: auto; }
+    #linesTable.show-desc { min-width: 1200px; }
+    #linesTable.show-desc .desc-col { min-width: 320px; white-space: normal; }
+</style>
+
 <div class="preview-topbar">
     <h2>@(Model.Doc.InvoiceNo ?? Model.Doc.Filename)</h2>
     <div style="display: flex; gap: 8px;">
@@ -59,11 +65,13 @@
                 var tolerance = Math.Max(compareTotal * 0.01m, 0.5m);
                 var sumMatches = compareTotal != 0m && Math.Abs(lineSum - compareTotal) <= tolerance;
 
+                <div class="lines-scroll">
                 <table class="lines-table" id="linesTable">
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Cod PDF</th>
+                            <th class="code-col">Cod PDF</th>
+                            <th class="code-col">Cod extern</th>
                             <th class="desc-col" style="display:none;">Descriere PDF</th>
                             <th>Cod ERP</th>
                             <th class="desc-col" style="display:none;">Descriere ERP</th>
@@ -85,7 +93,8 @@
                             var erpCode = matchItem?.ErpItemCode;
                             <tr>
                                 <td>@lineNo</td>
-                                <td style="font-family: var(--font-mono); font-size: 12px; font-weight: 600;">@(line.CodIntern ?? "-")</td>
+                                <td class="code-col" style="font-family: var(--font-mono); font-size: 12px; font-weight: 600;">@(line.CodIntern ?? "-")</td>
+                                <td class="code-col" style="font-family: var(--font-mono); font-size: 11px; color: var(--c-text-secondary);">@(matchedLine?.ExternalCode ?? "-")</td>
                                 <td class="desc-col" style="display:none; font-size: 12px;">@line.DescriptionRaw</td>
                                 <td style="font-family: var(--font-mono); font-size: 12px; font-weight: 600; @matchCss">@(erpCode ?? "-")</td>
                                 <td class="desc-col" style="display:none; font-size: 12px; @matchCss">@(matchItem?.Name ?? "-")</td>
@@ -103,6 +112,7 @@
                         </tr>
                     </tbody>
                 </table>
+                </div>
             }
         }
         else
@@ -119,7 +129,12 @@
 
 <script>
     document.getElementById('toggleDescriptions')?.addEventListener('change', function () {
-        var cols = document.querySelectorAll('.desc-col');
-        cols.forEach(function (c) { c.style.display = this.checked ? '' : 'none'; }.bind(this));
+        var showDesc = this.checked;
+        document.querySelectorAll('.desc-col').forEach(function (c) { c.style.display = showDesc ? '' : 'none'; });
+        // When descriptions are shown, hide the code columns and let the description columns
+        // take the freed space. Horizontal scroll kicks in via .lines-scroll when needed.
+        document.querySelectorAll('.code-col').forEach(function (c) { c.style.display = showDesc ? 'none' : ''; });
+        var tbl = document.getElementById('linesTable');
+        if (tbl) tbl.classList.toggle('show-desc', showDesc);
     });
 </script>

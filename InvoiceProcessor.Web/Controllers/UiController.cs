@@ -186,7 +186,7 @@ public class UiController(AppDbContext db, IPostingJobService postingJobService)
     public async Task<IActionResult> GetNewItems(CancellationToken cancellationToken)
     {
         var items = await db.CatalogItems
-            .Where(c => c.IsAutoCreated && c.Active)
+            .Where(c => c.IsAutoCreated && c.AcceptedAt == null && c.Active)
             .OrderByDescending(c => c.AutoCreatedAt)
             .Select(c => new { c.Id, c.ErpItemCode, c.Name, c.Uom, c.AutoCreatedAt })
             .ToListAsync(cancellationToken);
@@ -209,7 +209,9 @@ public class UiController(AppDbContext db, IPostingJobService postingJobService)
                 i.Id, i.ErpItemCode, i.Name, i.Uom, i.AutoCreatedAt,
                 DocumentId = srcLine?.DocumentId,
                 InvoiceNo = srcLine?.Document?.InvoiceNo ?? srcLine?.Document?.Filename,
-                LineNo = srcLine?.LineNo
+                LineNo = srcLine?.LineNo,
+                ExternalCode = srcLine?.ExternalCode,
+                PropertyClass = srcLine?.PropertyClass
             };
         });
         return Ok(result);
@@ -224,10 +226,19 @@ public class UiController(AppDbContext db, IPostingJobService postingJobService)
         item.ErpItemCode = request.ErpItemCode;
         item.Name = request.Name;
         item.Uom = request.Uom;
-        item.IsAutoCreated = false; // accepted — hide from proposed list immediately
+        item.AcceptedAt = DateTime.UtcNow; // stays IsAutoCreated=true until confirmed by CSV import
+
+        // Always load the source invoice line: ExternalCode may fall back to it, and PropertyClass is only on the line.
+        var srcLine = await db.InvoiceLines
+            .Where(l => l.MatchedItemId == item.Id)
+            .OrderBy(l => l.LineNo)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var externalCode = string.IsNullOrWhiteSpace(request.ExternalCode) ? srcLine?.ExternalCode : request.ExternalCode;
+        var propertyClass = string.IsNullOrWhiteSpace(request.PropertyClass) ? srcLine?.PropertyClass : request.PropertyClass;
 
         // Create a catalog job for the robot to process
-        var payload = new CatalogItemPayload(Guid.NewGuid(), item.Id, item.ErpItemCode, item.Name, item.Uom);
+        var payload = new CatalogItemPayload(Guid.NewGuid(), item.Id, item.ErpItemCode, item.Name, item.Uom, externalCode, propertyClass);
         var job = new Models.CatalogJob
         {
             Id = payload.CatalogJobId,
@@ -287,6 +298,84 @@ public class UiController(AppDbContext db, IPostingJobService postingJobService)
         }
         var items = await query.OrderBy(c => c.Code).Take(30).Select(c => new { c.Code, c.Name }).ToListAsync(cancellationToken);
         return Ok(items);
+    }
+
+    [HttpGet("item-classes")]
+    public async Task<IActionResult> GetItemClasses(CancellationToken cancellationToken)
+    {
+        var items = await db.ItemClasses
+            .Where(ic => ic.Active)
+            .OrderBy(ic => ic.Name)
+            .Select(ic => ic.Name)
+            .ToListAsync(cancellationToken);
+        return Ok(items);
+    }
+
+    [HttpGet("customs-declarations")]
+    public async Task<IActionResult> GetCustomsDeclarations(CancellationToken cancellationToken)
+    {
+        var items = await db.CustomsDeclarations
+            .OrderByDescending(c => c.CreatedAt)
+            .Select(c => new { c.Id, c.Filename, c.Mrn, c.Lrn, c.ExchangeRate, c.ReleaseDate, c.InvoiceRef, c.CreatedAt })
+            .ToListAsync(cancellationToken);
+        return Ok(items);
+    }
+
+    [HttpPost("customs-declarations")]
+    [Microsoft.AspNetCore.Mvc.RequestSizeLimit(50_000_000)]
+    public async Task<IActionResult> UploadCustomsDeclaration(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0) return BadRequest("Fisier lipsa.");
+
+        var dviFolder = Path.Combine(Directory.GetCurrentDirectory(), "Data", "dvi");
+        Directory.CreateDirectory(dviFolder);
+        var storagePath = Path.Combine(dviFolder, $"{Guid.NewGuid():N}_{Path.GetFileName(file.FileName)}");
+        await using (var fs = System.IO.File.Create(storagePath))
+            await file.CopyToAsync(fs, cancellationToken);
+
+        var data = InvoiceProcessor.Web.Services.Extraction.CustomsDeclarationExtractor.Extract(storagePath);
+        var dvi = new CustomsDeclaration
+        {
+            Filename = file.FileName,
+            StoragePath = storagePath,
+            Mrn = data.Mrn,
+            Lrn = data.Lrn,
+            ExchangeRate = data.ExchangeRate,
+            ReleaseDate = data.ReleaseDate,
+            InvoiceRef = data.InvoiceRef
+        };
+        db.CustomsDeclarations.Add(dvi);
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(new { dvi.Id, dvi.Filename, dvi.Mrn, dvi.Lrn, dvi.ExchangeRate, dvi.ReleaseDate, dvi.InvoiceRef });
+    }
+
+    [HttpPost("documents/{id:guid}/customs-declaration")]
+    public async Task<IActionResult> AttachCustomsDeclaration(Guid id, [FromBody] AttachCustomsRequest request, CancellationToken cancellationToken)
+    {
+        var doc = await db.Documents.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        if (doc is null) return NotFound();
+        doc.CustomsDeclarationId = request.CustomsDeclarationId;
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(new { doc.Id, doc.CustomsDeclarationId });
+    }
+
+    public record AttachCustomsRequest(Guid? CustomsDeclarationId);
+
+    [HttpDelete("customs-declarations/{id:guid}")]
+    public async Task<IActionResult> DeleteCustomsDeclaration(Guid id, CancellationToken cancellationToken)
+    {
+        var dvi = await db.CustomsDeclarations.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        if (dvi is null) return NotFound();
+
+        var attached = await db.Documents.Where(d => d.CustomsDeclarationId == id).ToListAsync(cancellationToken);
+        foreach (var d in attached) d.CustomsDeclarationId = null;
+
+        try { if (System.IO.File.Exists(dvi.StoragePath)) System.IO.File.Delete(dvi.StoragePath); }
+        catch { /* best-effort */ }
+
+        db.CustomsDeclarations.Remove(dvi);
+        await db.SaveChangesAsync(cancellationToken);
+        return Ok(new { id });
     }
 
     [HttpGet("posting-jobs")]

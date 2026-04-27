@@ -11,7 +11,7 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
 {
     public async Task<IReadOnlyList<PostingJob>> CreatePostingJobsAsync(IReadOnlyList<Guid> documentIds, CancellationToken cancellationToken)
     {
-        var docs = await db.Documents.Include(d => d.Supplier).Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem).Include(d => d.ExtractArtifact).Where(d => documentIds.Contains(d.Id)).ToListAsync(cancellationToken);
+        var docs = await db.Documents.Include(d => d.Supplier).Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem).Include(d => d.ExtractArtifact).Include(d => d.CustomsDeclaration).Where(d => documentIds.Contains(d.Id)).ToListAsync(cancellationToken);
         var jobs = new List<PostingJob>();
 
         // Separate batches: one for import, one for local
@@ -25,17 +25,35 @@ public class PostingJobService(AppDbContext db, IOrchestratorClient orchestrator
             var canonical = JsonSerializer.Deserialize<CanonicalInvoice>(doc.ExtractArtifact?.CanonicalJson ?? "{}");
             if (canonical is null) continue;
 
+            // Skip lines whose matched catalog item is still pending review (auto-created, not yet accepted).
+            // Those items don't exist in the ERP yet, so the robot cannot post them.
+            var postableLines = doc.InvoiceLines
+                .Where(l => l.MatchedItem == null
+                            || !l.MatchedItem.IsAutoCreated
+                            || l.MatchedItem.AcceptedAt != null)
+                .OrderBy(l => l.LineNo)
+                .Select(l => new ReadyToPostLine(l.LineNo, l.Description, l.Qty, l.Uom, l.Amount, l.MatchedItem?.ErpItemCode, l.MatchedItem?.Name, l.MatchConfidence, l.MatchReason ?? string.Empty, l.WarehouseCode, l.CostCenterCode, l.ExternalCode, l.PropertyClass))
+                .ToList();
+
             var payload = new ReadyToPostInvoicePayload(
                 Guid.NewGuid(),
                 doc.Id,
                 doc.CorrelationId,
                 doc.Supplier?.ErpName ?? doc.Supplier?.Name,
                 doc.IsImport,
+                (doc.Supplier?.InvoiceType ?? Enums.InvoiceType.Intern).ToString(),
+                (doc.Supplier?.TaxationType ?? Enums.TaxationType.TaxareNormala).ToString(),
+                (doc.Supplier?.TransactionType ?? Enums.TransactionType.TranzactieInterna).ToString(),
                 canonical.InvoiceNo,
                 canonical.InvoiceDate,
                 canonical.Currency,
                 canonical.GrossTotal,
-                doc.InvoiceLines.OrderBy(l => l.LineNo).Select(l => new ReadyToPostLine(l.LineNo, l.Description, l.Qty, l.Uom, l.Amount, l.MatchedItem?.ErpItemCode, l.MatchedItem?.Name, l.MatchConfidence, l.MatchReason ?? string.Empty, l.WarehouseCode, l.CostCenterCode)).ToList());
+                doc.WarehouseCode,
+                doc.CustomsDeclaration?.Mrn,
+                doc.CustomsDeclaration?.Lrn,
+                doc.CustomsDeclaration?.ExchangeRate,
+                doc.CustomsDeclaration?.ReleaseDate,
+                postableLines);
 
             var job = new PostingJob
             {

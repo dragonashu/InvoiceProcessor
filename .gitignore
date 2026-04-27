@@ -22,6 +22,10 @@ publish/
 InvoiceProcessor.Web/Data/store/
 InvoiceProcessor.Web/Data/inbox/
 
+## All PDF files (samples, test fixtures, ad-hoc exports)
+*.pdf
+*.PDF
+
 ## Nomenclator source files
 nomeclator/
 

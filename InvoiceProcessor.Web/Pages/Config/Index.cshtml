@@ -57,7 +57,10 @@
                                             data-erp="@s.ErpName"
                                             data-vat="@s.VatNo"
                                             data-country="@s.Country"
-                                            data-aliases="@IndexModel.ParseAliases(s.AliasesJson)">
+                                            data-aliases="@IndexModel.ParseAliases(s.AliasesJson)"
+                                            data-invoicetype="@s.InvoiceType"
+                                            data-taxationtype="@s.TaxationType"
+                                            data-transactiontype="@s.TransactionType">
                                         Editeaza
                                     </button>
                                 </td>
@@ -95,6 +98,28 @@
                         <label class="field-label">Aliasuri (separate prin virgula)</label>
                         <input type="text" name="Aliases" id="aliasesInput" class="form-input" placeholder="ex: CORTIZO, Cortizo SA, ALUMINIOS CORTIZO" />
                     </div>
+                    <div style="display: flex; gap: 12px;">
+                        <div style="flex: 1;">
+                            <label class="field-label">Tip factura</label>
+                            <select name="InvoiceType" id="invoiceTypeInput" class="form-input">
+                                <option value="Intern">Intern</option>
+                                <option value="Import">Import</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <select name="TaxationType" id="taxationTypeInput" class="form-input" style="margin-top: 22px;">
+                                <option value="TaxareNormala">Taxare normala</option>
+                                <option value="TaxareInversa">Taxare inversa</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="field-label">Tip Tranzactie</label>
+                        <select name="TransactionType" id="transactionTypeInput" class="form-input">
+                            <option value="TranzactieInterna">Tranzactie interna</option>
+                            <option value="AchizitieIntracomunitara">Achizitie intracomunitara</option>
+                        </select>
+                    </div>
                     <div class="actions-bar" style="border-top: none; padding-top: 0;">
                         <button type="submit" asp-page-handler="Save" class="btn btn-primary" id="saveBtn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -126,15 +151,21 @@
                     <div class="stat-card-value" style="font-size: 22px;">@Model.MappingCount</div>
                 </div>
             </div>
+            <div style="margin-bottom: 16px;">
+                <label class="field-label">Cauta in catalog (cod sau denumire)</label>
+                <input type="text" id="catalogSearchInput" class="form-input" placeholder="ex: EF230, PROFILE, 7016..." style="margin-bottom: 8px;" />
+                <div id="catalogSearchResults" style="display:none; max-height: 250px; overflow-y: auto; border: 1px solid var(--c-border); border-radius: var(--radius); background: var(--c-surface);"></div>
+            </div>
+
             <form method="post" asp-page-handler="ImportCatalog" enctype="multipart/form-data">
                 <div style="display: flex; flex-direction: column; gap: 12px;">
                     <div>
-                        <label class="field-label">Import / Actualizare catalog (CSV)</label>
+                        <label class="field-label">Import / Actualizare catalog (XLSX)</label>
                         <p style="font-size: 12px; color: var(--c-text-muted); margin-bottom: 8px;">
-                            Fisierul trebuie sa contina coloanele <code>CODOBIECT</code> si <code>Denumire obiect</code>. Optional: <code>UM</code>, <code>CotaTVA</code>.<br/>
-                            Articolele existente (dupa CODOBIECT) vor fi actualizate. Articolele noi vor fi adaugate.
+                            Incarca fisierul implicit <code>Nomenclator articole.XLSX</code>. Randurile de antet si cele libere sunt ignorate automat.<br/>
+                            Se importa primele 4 coloane: <code>UM</code>, <code>CODOBIECT</code>, <code>Cod Intern</code>, <code>Denumire</code>.
                         </p>
-                        <input type="file" name="CatalogFile" accept=".csv,.txt,.tsv" class="form-input" style="padding: 6px;" />
+                        <input type="file" name="CatalogFile" accept=".xlsx" class="form-input" style="padding: 6px;" />
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <button type="submit" class="btn btn-primary">
@@ -149,6 +180,12 @@
                     <button type="submit" asp-page-handler="Rematch" class="btn btn-secondary" style="color: var(--c-primary);"
                             onclick="return confirm('Re-asociezi toate documentele cu catalogul curent?')">
                         Re-asociaza toate documentele
+                    </button>
+                </form>
+                <form method="post" style="margin:0;">
+                    <button type="submit" asp-page-handler="Reextract" class="btn btn-secondary" style="color: var(--c-primary);"
+                            onclick="return confirm('Re-extragi toate documentele cu extractorul curent? (regenereaza JSON-ul canonic si refai matching-ul)')">
+                        Re-extrage toate documentele
                     </button>
                 </form>
                 <form method="post" style="margin:0;">
@@ -177,9 +214,9 @@
             </div>
             <form method="post" asp-page-handler="ImportWarehouses" enctype="multipart/form-data" style="margin-bottom: 16px;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <label class="field-label">Import gestiuni (CSV: COD, DENUMIRE)</label>
+                    <label class="field-label">Import gestiuni (XLSX: coloana Gestiune)</label>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="file" name="WarehouseFile" accept=".csv,.txt,.tsv" class="form-input" style="padding: 6px;" />
+                        <input type="file" name="WarehouseFile" accept=".xlsx" class="form-input" style="padding: 6px;" />
                         <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Importa gestiuni</button>
                     </div>
                 </div>
@@ -190,6 +227,93 @@
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <input type="file" name="CostCenterFile" accept=".csv,.txt,.tsv" class="form-input" style="padding: 6px;" />
                         <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Importa centre cost</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;">Declaratii vamale (DVI)</div>
+            <p style="font-size:12px; color:var(--c-text-muted); margin-bottom: 10px;">
+                Pune fisierele PDF in folderul <code>DVI/</code> din directorul aplicatiei — sunt importate automat la fiecare scanare (~30s).
+                MRN, LRN (ultimele 3 cifre), cursul de schimb si data liberului vamal se extrag automat.
+            </p>
+            <div style="display:flex; gap:8px; flex-wrap: wrap;">
+                <form method="post" asp-page-handler="ImportDvi" style="margin:0;">
+                    <button type="submit" class="btn btn-primary">Scaneaza folder acum</button>
+                </form>
+                <form method="post" asp-page-handler="ClearDvi" style="margin:0;"
+                      onsubmit="return confirm('Stergi toate DVI-urile? Documentele atasate vor ramane fara DVI.');">
+                    <button type="submit" class="btn btn-secondary" style="color: var(--c-danger);">Sterge toate DVI-urile</button>
+                </form>
+            </div>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--c-text-muted);">
+                Declaratii in evidenta: <strong>@Model.DviCount</strong>
+            </div>
+            @if (Model.DviCount > 0)
+            {
+                <table class="data-table" id="dviTable" style="margin-top: 10px; font-size: 12px;">
+                    <thead>
+                        <tr>
+                            <th style="width:180px;">Fisier</th>
+                            <th>MRN</th>
+                            <th style="width:60px;">LRN</th>
+                            <th style="width:80px;">Curs</th>
+                            <th style="width:90px;">Liber vama</th>
+                            <th style="width:60px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="dviTableBody">
+                        <tr><td colspan="6" style="text-align:center; color:var(--c-text-muted); padding:10px;">Se incarca...</td></tr>
+                    </tbody>
+                </table>
+                <script>
+                    fetch('/ui/customs-declarations').then(r => r.json()).then(function (items) {
+                        var tbody = document.getElementById('dviTableBody');
+                        if (!items.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--c-text-muted); padding:10px;">Niciun DVI.</td></tr>'; return; }
+                        tbody.innerHTML = items.map(function (d) {
+                            var rel = d.releaseDate ? new Date(d.releaseDate) : null;
+                            var relStr = rel ? ('0' + rel.getDate()).slice(-2) + '.' + ('0' + (rel.getMonth() + 1)).slice(-2) + '.' + rel.getFullYear() : '—';
+                            return '<tr data-id="' + d.id + '">' +
+                                '<td>' + (d.filename || '') + '</td>' +
+                                '<td style="font-family:var(--font-mono);">' + (d.mrn || '—') + '</td>' +
+                                '<td style="font-family:var(--font-mono);">' + (d.lrn || '—') + '</td>' +
+                                '<td style="font-family:var(--font-mono);">' + (d.exchangeRate != null ? Number(d.exchangeRate).toFixed(4) : '—') + '</td>' +
+                                '<td>' + relStr + '</td>' +
+                                '<td><button type="button" class="btn-icon dvi-del" title="Sterge">&times;</button></td>' +
+                                '</tr>';
+                        }).join('');
+                        tbody.querySelectorAll('.dvi-del').forEach(function (btn) {
+                            btn.addEventListener('click', function () {
+                                var row = btn.closest('tr');
+                                if (!confirm('Stergi DVI "' + row.cells[0].textContent + '"?')) return;
+                                fetch('/ui/customs-declarations/' + row.dataset.id, { method: 'DELETE' })
+                                    .then(function (r) { if (r.ok) { row.remove(); } });
+                            });
+                        });
+                    });
+                </script>
+            }
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="section-title" style="margin-top: 0;">Clase caracterizare articole</div>
+            <div class="stat-cards" style="grid-template-columns: 1fr; margin-bottom: 16px;">
+                <div class="stat-card">
+                    <div class="stat-card-label">Clase in nomenclator</div>
+                    <div class="stat-card-value" style="font-size: 22px;">@Model.ItemClassCount</div>
+                </div>
+            </div>
+            <form method="post" asp-page-handler="ImportItemClasses" enctype="multipart/form-data">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label class="field-label">Import clase articole (XLSX: NrCrt, Denumire, Simbol, Nivel)</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="file" name="ItemClassFile" accept=".xlsx" class="form-input" style="padding: 6px;" />
+                        <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Importa clase</button>
                     </div>
                 </div>
             </form>
@@ -211,6 +335,9 @@
             document.getElementById('vatInput').value = btn.dataset.vat || '';
             document.getElementById('countryInput').value = btn.dataset.country || '';
             document.getElementById('aliasesInput').value = btn.dataset.aliases || '';
+            document.getElementById('invoiceTypeInput').value = btn.dataset.invoicetype || 'Intern';
+            document.getElementById('taxationTypeInput').value = btn.dataset.taxationtype || 'TaxareNormala';
+            document.getElementById('transactionTypeInput').value = btn.dataset.transactiontype || 'TranzactieInterna';
             document.getElementById('formTitle').textContent = 'Editeaza furnizor';
             document.getElementById('saveBtnText').textContent = 'Salveaza';
             document.getElementById('deleteBtn').style.display = '';
@@ -225,9 +352,49 @@
         document.getElementById('vatInput').value = '';
         document.getElementById('countryInput').value = '';
         document.getElementById('aliasesInput').value = '';
+        document.getElementById('invoiceTypeInput').value = 'Intern';
+        document.getElementById('taxationTypeInput').value = 'TaxareNormala';
+        document.getElementById('transactionTypeInput').value = 'TranzactieInterna';
         document.getElementById('formTitle').textContent = 'Adauga furnizor';
         document.getElementById('saveBtnText').textContent = 'Adauga';
         document.getElementById('deleteBtn').style.display = 'none';
         document.getElementById('cancelBtn').style.display = 'none';
     });
+
+    (function () {
+        var searchInput = document.getElementById('catalogSearchInput');
+        var resultsDiv = document.getElementById('catalogSearchResults');
+        var debounceTimer = null;
+
+        searchInput.addEventListener('input', function () {
+            clearTimeout(debounceTimer);
+            var q = searchInput.value.trim();
+            if (q.length < 2) { resultsDiv.style.display = 'none'; return; }
+
+            debounceTimer = setTimeout(function () {
+                fetch('/ui/catalog/search?q=' + encodeURIComponent(q))
+                    .then(function (r) { return r.json(); })
+                    .then(function (items) {
+                        if (items.length === 0) {
+                            resultsDiv.innerHTML = '<div style="padding:12px; text-align:center; color:var(--c-text-muted); font-size:13px;">Niciun rezultat gasit.</div>';
+                        } else {
+                            resultsDiv.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+                                '<thead><tr style="border-bottom:1px solid var(--c-border);">' +
+                                '<th style="padding:6px 10px; text-align:left; font-size:11px; color:var(--c-text-muted);">Cod</th>' +
+                                '<th style="padding:6px 10px; text-align:left; font-size:11px; color:var(--c-text-muted);">Denumire</th>' +
+                                '<th style="padding:6px 10px; text-align:left; font-size:11px; color:var(--c-text-muted);">UM</th>' +
+                                '</tr></thead><tbody>' +
+                                items.map(function (it) {
+                                    return '<tr style="border-bottom:1px solid var(--c-border-light);">' +
+                                        '<td style="padding:5px 10px; font-family:var(--font-mono); font-weight:600;">' + (it.erpItemCode || '-') + '</td>' +
+                                        '<td style="padding:5px 10px;">' + (it.name || '-') + '</td>' +
+                                        '<td style="padding:5px 10px;">' + (it.uom || '-') + '</td></tr>';
+                                }).join('') +
+                                '</tbody></table>';
+                        }
+                        resultsDiv.style.display = '';
+                    });
+            }, 300);
+        });
+    })();
 </script>

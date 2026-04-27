@@ -10,4 +10,5 @@ public class CatalogItem
     public bool Active { get; set; } = true;
     public bool IsAutoCreated { get; set; }
     public DateTime? AutoCreatedAt { get; set; }
+    public DateTime? AcceptedAt { get; set; }
 }

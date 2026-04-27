@@ -22,7 +22,10 @@
     .btn-match { padding: 4px; border: 1px solid var(--c-border); background: var(--c-surface); cursor: pointer; border-radius: 4px; color: var(--c-text-muted); flex-shrink: 0; display: flex; align-items: center; }
     .btn-match:hover { background: var(--c-primary-light); color: var(--c-primary); border-color: var(--c-primary); }
     .desc-col { display: none; }
-    .show-desc .desc-col { display: table-cell; }
+    .show-desc .desc-col { display: table-cell; min-width: 260px; white-space: normal; }
+    .show-desc .code-col { display: none; }
+    .lines-scroll { overflow-x: auto; }
+    .show-desc { min-width: 1050px; }
     .defaults-bar { background: var(--c-neutral-bg); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 12px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
     .defaults-bar .field-label { font-size: 11px; margin-bottom: 3px; }
     .filter-dropdown { position: relative; }
@@ -46,6 +49,12 @@
     .match-result-code { font-family: var(--font-mono); font-size: 12px; color: var(--c-text-muted); }
     .match-result-name { font-size: 13px; font-weight: 600; }
     .match-modal-footer { padding: 12px 20px; border-top: 1px solid var(--c-border); text-align: right; }
+    .edit-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--c-border); margin: 8px 0 12px; }
+    .edit-tab { padding: 8px 16px; cursor: pointer; border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; font-size: 13px; font-weight: 600; color: var(--c-text-muted); background: transparent; }
+    .edit-tab:hover { color: var(--c-text); }
+    .edit-tab.active { border-color: var(--c-border); background: var(--c-surface); color: var(--c-primary); margin-bottom: -1px; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
 </style>
 
 <div class="preview-topbar">
@@ -91,6 +100,13 @@
                         }
                     </select>
                 </div>
+                <div class="field">
+                    <div class="field-label">Gestiune antet</div>
+                    <div class="filter-dropdown">
+                        <input type="text" name="HeaderWarehouseCode" id="headerWarehouse" value="@Model.HeaderWarehouseCode" class="form-input" placeholder="Cauta gestiune..." autocomplete="off" />
+                        <div class="dd-list" id="headerWarehouseList"></div>
+                    </div>
+                </div>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
@@ -100,91 +116,164 @@
                 </label>
             </div>
 
-            <div class="defaults-bar">
-                <div>
-                    <div class="field-label">Gestiune implicita</div>
-                    <div class="filter-dropdown">
-                        <input type="text" id="defaultWarehouse" placeholder="Cauta gestiune..." autocomplete="off" />
-                        <div class="dd-list" id="defaultWarehouseList"></div>
-                    </div>
-                </div>
-                <div>
-                    <div class="field-label">Centru cost implicit</div>
-                    <div class="filter-dropdown">
-                        <input type="text" id="defaultCostCenter" placeholder="Cauta centru cost..." autocomplete="off" />
-                        <div class="dd-list" id="defaultCostCenterList"></div>
-                    </div>
-                </div>
-                <button type="button" class="btn btn-secondary" style="padding: 5px 12px; font-size: 12px;" id="applyDefaultsBtn">Aplica pe toate liniile</button>
+            <div class="edit-tabs">
+                <button type="button" class="edit-tab active" data-tab="lines">Linii</button>
+                <button type="button" class="edit-tab" data-tab="alloc">Alocare (Gestiune / Centru cost)</button>
+                <button type="button" class="edit-tab" data-tab="dvi">DVI (Vamal)</button>
             </div>
 
-            <table class="edit-lines-table" id="linesTable">
-                <thead>
-                    <tr>
-                        <th style="width:80px;">Cod PDF</th>
-                        <th class="desc-col">Descriere PDF</th>
-                        <th>Articol ERP</th>
-                        <th class="desc-col">Descriere ERP</th>
-                        <th style="width:55px;">Cant.</th>
-                        <th style="width:45px;">UM</th>
-                        <th style="width:70px;">Total</th>
-                        <th style="width:85px;">Gestiune</th>
-                        <th style="width:85px;">C. Cost</th>
-                        <th style="width:25px;"></th>
-                    </tr>
-                </thead>
-                <tbody id="linesBody">
-                    @for (var i = 0; i < Model.Lines.Count; i++)
-                    {
-                        Model.MatchedLines.TryGetValue(i + 1, out var matchedLine);
-                        var matchItem = matchedLine?.MatchedItem;
-                        var hasMatch = matchItem is not null;
-                        var matchConf = matchedLine?.MatchConfidence ?? 0m;
-                        var isAutoCreated = matchedLine?.MatchReason == "auto-created";
-                        var matchCss = isAutoCreated ? "color: #e67e22; font-weight:600;" : matchConf >= 0.85m ? "color: var(--c-success); font-weight:600;" : matchConf >= 0.60m ? "color: var(--c-primary); font-weight:600;" : "color: var(--c-text-muted);";
+            <div class="tab-panel tab-lines active">
+                <div class="lines-scroll">
+                <table class="edit-lines-table" id="linesTable">
+                    <thead>
                         <tr>
-                            <td>
-                                <input type="text" name="Lines[@i].CodIntern" value="@Model.Lines[i].CodIntern" class="form-input form-input-sm" style="font-family:var(--font-mono); font-size:11px;" />
-                                <input type="hidden" name="Lines[@i].DescriptionRaw" value="@Model.Lines[i].DescriptionRaw" />
-                                <input type="hidden" name="Lines[@i].Bare" value="@Model.Lines[i].Bare" />
-                                <input type="hidden" name="Lines[@i].UnitPrice" value="@Model.Lines[i].UnitPrice" />
-                            </td>
-                            <td class="desc-col"><span style="font-size:11px;">@Model.Lines[i].DescriptionRaw</span></td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 3px;">
-                                    <span class="erp-match-label" id="erpLabel_@i" style="font-size:11px; font-family:var(--font-mono); @matchCss flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
-                                          title="@(hasMatch ? $"{matchItem!.ErpItemCode} — {matchItem.Name}" : "Neasociat")">
-                                        @(hasMatch ? matchItem!.ErpItemCode : "-")
-                                    </span>
-                                    <button type="button" class="btn-match" title="Asociaza articol ERP"
-                                            data-line="@i" data-desc="@Model.Lines[i].DescriptionRaw"
-                                            data-vendor="@Model.Lines[i].CodIntern"
-                                            data-lineid="@matchedLine?.Id" data-supplierid="@Model.Doc.SupplierId">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                                    </button>
-                                </div>
-                            </td>
-                            <td class="desc-col"><span style="font-size:11px; @matchCss">@(hasMatch ? matchItem!.Name : "-")</span></td>
-                            <td><input type="number" step="0.01" name="Lines[@i].Qty" value="@Model.Lines[i].Qty" class="form-input form-input-sm form-input-num" /></td>
-                            <td><input type="text" name="Lines[@i].Uom" value="@Model.Lines[i].Uom" class="form-input form-input-sm" style="font-size:11px;" /></td>
-                            <td><input type="number" step="0.01" name="Lines[@i].LineTotal" value="@Model.Lines[i].LineTotal" class="form-input form-input-sm form-input-num line-total" /></td>
-                            <td>
-                                <div class="filter-dropdown">
-                                    <input type="text" name="Lines[@i].WarehouseCode" value="@Model.Lines[i].WarehouseCode" class="form-input form-input-sm wh-input" placeholder="Gest." autocomplete="off" style="font-size:11px; width:80px;" />
-                                    <div class="dd-list wh-list"></div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="filter-dropdown">
-                                    <input type="text" name="Lines[@i].CostCenterCode" value="@Model.Lines[i].CostCenterCode" class="form-input form-input-sm cc-input" placeholder="C.Cost" autocomplete="off" style="font-size:11px; width:80px;" />
-                                    <div class="dd-list cc-list"></div>
-                                </div>
-                            </td>
-                            <td><button type="button" class="btn-icon remove-line" title="Sterge linia">&times;</button></td>
+                            <th class="code-col" style="width:80px;">Cod PDF</th>
+                            <th class="desc-col">Descriere PDF</th>
+                            <th>Articol ERP</th>
+                            <th class="desc-col">Descriere ERP</th>
+                            <th style="width:55px;">Cant.</th>
+                            <th style="width:45px;">UM</th>
+                            <th style="width:70px;">Total</th>
+                            <th style="width:25px;"></th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody id="linesBody">
+                        @for (var i = 0; i < Model.Lines.Count; i++)
+                        {
+                            Model.MatchedLines.TryGetValue(i + 1, out var matchedLine);
+                            var matchItem = matchedLine?.MatchedItem;
+                            var hasMatch = matchItem is not null;
+                            var matchConf = matchedLine?.MatchConfidence ?? 0m;
+                            var isAutoCreated = matchedLine?.MatchReason == "auto-created";
+                            var matchCss = isAutoCreated ? "color: #e67e22; font-weight:600;" : matchConf >= 0.85m ? "color: var(--c-success); font-weight:600;" : matchConf >= 0.60m ? "color: var(--c-primary); font-weight:600;" : "color: var(--c-text-muted);";
+                            <tr>
+                                <td class="code-col">
+                                    <input type="text" name="Lines[@i].CodIntern" value="@Model.Lines[i].CodIntern" class="form-input form-input-sm" style="font-family:var(--font-mono); font-size:11px;" />
+                                    <input type="hidden" name="Lines[@i].DescriptionRaw" value="@Model.Lines[i].DescriptionRaw" />
+                                    <input type="hidden" name="Lines[@i].Bare" value="@Model.Lines[i].Bare" />
+                                    <input type="hidden" name="Lines[@i].UnitPrice" value="@Model.Lines[i].UnitPrice" />
+                                </td>
+                                <td class="desc-col"><span style="font-size:11px;">@Model.Lines[i].DescriptionRaw</span></td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 3px;">
+                                        <span class="erp-match-label" id="erpLabel_@i" style="font-size:11px; font-family:var(--font-mono); @matchCss flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                                              title="@(hasMatch ? $"{matchItem!.ErpItemCode} — {matchItem.Name}" : "Neasociat")">
+                                            @(hasMatch ? matchItem!.ErpItemCode : "-")
+                                        </span>
+                                        <button type="button" class="btn-match" title="Asociaza articol ERP"
+                                                data-line="@i" data-desc="@Model.Lines[i].DescriptionRaw"
+                                                data-vendor="@Model.Lines[i].CodIntern"
+                                                data-lineid="@matchedLine?.Id" data-supplierid="@Model.Doc.SupplierId">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="desc-col"><span style="font-size:11px; @matchCss">@(hasMatch ? matchItem!.Name : "-")</span></td>
+                                <td><input type="number" step="0.01" name="Lines[@i].Qty" value="@Model.Lines[i].Qty" class="form-input form-input-sm form-input-num" /></td>
+                                <td><input type="text" name="Lines[@i].Uom" value="@Model.Lines[i].Uom" class="form-input form-input-sm" style="font-size:11px;" /></td>
+                                <td><input type="number" step="0.01" name="Lines[@i].LineTotal" value="@Model.Lines[i].LineTotal" class="form-input form-input-sm form-input-num line-total" /></td>
+                                <td><button type="button" class="btn-icon remove-line" title="Sterge linia">&times;</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                </div>
+            </div>
+
+            <div class="tab-panel tab-alloc">
+                <div class="defaults-bar">
+                    <div>
+                        <div class="field-label">Gestiune globala</div>
+                        <div class="filter-dropdown">
+                            <input type="text" id="defaultWarehouse" placeholder="Cauta gestiune..." autocomplete="off" />
+                            <div class="dd-list" id="defaultWarehouseList"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="field-label">Centru cost global</div>
+                        <div class="filter-dropdown">
+                            <input type="text" id="defaultCostCenter" placeholder="Cauta centru cost..." autocomplete="off" />
+                            <div class="dd-list" id="defaultCostCenterList"></div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-secondary" style="padding: 5px 12px; font-size: 12px;" id="applyDefaultsBtn">Aplica pe toate liniile</button>
+                </div>
+
+                @* allocation table rendered below *@
+                <table class="edit-lines-table" id="allocTable">
+                    <thead>
+                        <tr>
+                            <th style="width:90px;">Articol ERP</th>
+                            <th>Descriere ERP</th>
+                            <th style="width:180px;">Gestiune</th>
+                            <th style="width:180px;">Centru cost</th>
+                        </tr>
+                    </thead>
+                    <tbody id="allocBody">
+                        @for (var i = 0; i < Model.Lines.Count; i++)
+                        {
+                            Model.MatchedLines.TryGetValue(i + 1, out var matchedLine);
+                            var matchItem = matchedLine?.MatchedItem;
+                            var hasMatch = matchItem is not null;
+                            <tr data-idx="@i">
+                                <td style="font-family:var(--font-mono); font-size:12px;">@(hasMatch ? matchItem!.ErpItemCode : "-")</td>
+                                <td style="font-size:12px;">@(hasMatch ? matchItem!.Name : "-")</td>
+                                <td>
+                                    <div class="filter-dropdown">
+                                        <input type="text" name="Lines[@i].WarehouseCode" value="@Model.Lines[i].WarehouseCode" class="form-input form-input-sm wh-input" placeholder="Gestiune" autocomplete="off" style="font-size:12px; width:100%;" />
+                                        <div class="dd-list wh-list"></div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="filter-dropdown">
+                                        <input type="text" name="Lines[@i].CostCenterCode" value="@Model.Lines[i].CostCenterCode" class="form-input form-input-sm cc-input" placeholder="Centru cost" autocomplete="off" style="font-size:12px; width:100%;" />
+                                        <div class="dd-list cc-list"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="tab-panel tab-dvi">
+                <div class="defaults-bar" style="align-items: center;">
+                    <div style="flex: 1;">
+                        <div class="field-label">Declaratie vamala (DVI)</div>
+                        <select id="dviSelect" class="form-input" style="width: 100%;">
+                            <option value="">— niciuna —</option>
+                        </select>
+                    </div>
+                    <button type="button" id="dviAttachBtn" class="btn btn-secondary" style="padding:6px 14px; font-size:12px; white-space:nowrap;">Atribuie la factura</button>
+                </div>
+
+                <div style="padding: 16px; background: var(--c-neutral-bg); border: 1px solid var(--c-border); border-radius: var(--radius); margin-top: 12px;">
+                    <div style="font-size: 12px; color: var(--c-text-muted); margin-bottom: 10px;">
+                        Aceste 4 valori extrase din DVI completeaza factura la postarea in ERP (obligatoriu pentru furnizori externi).
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="field">
+                            <div class="field-label">MRN</div>
+                            <div id="dviMrn" style="font-family: var(--font-mono); font-size: 13px; font-weight: 600;">@(Model.Doc.CustomsDeclaration?.Mrn ?? "—")</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-label">LRN</div>
+                            <div id="dviLrn" style="font-family: var(--font-mono); font-size: 13px; font-weight: 600;">@(Model.Doc.CustomsDeclaration?.Lrn ?? "—")</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-label">Cursul de schimb</div>
+                            <div id="dviRate" style="font-family: var(--font-mono); font-size: 13px; font-weight: 600;">@(Model.Doc.CustomsDeclaration?.ExchangeRate?.ToString("0.0000") ?? "—")</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-label">Data liber vama</div>
+                            <div id="dviReleaseDate" style="font-family: var(--font-mono); font-size: 13px; font-weight: 600;">@(Model.Doc.CustomsDeclaration?.ReleaseDate?.ToString("dd.MM.yyyy") ?? "—")</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 11px; color: var(--c-text-muted);">
+                        Fisier: <span id="dviFilename">@(Model.Doc.CustomsDeclaration?.Filename ?? "—")</span>
+                    </div>
+                </div>
+            </div>
 
             <div class="edit-validation" id="validationBar"></div>
 
@@ -222,18 +311,41 @@
         document.getElementById('linesTable').classList.toggle('show-desc', this.checked);
     });
 
-    // Remove line
+    // Tab switching
+    document.querySelectorAll('.edit-tab').forEach(function (t) {
+        t.addEventListener('click', function () {
+            document.querySelectorAll('.edit-tab').forEach(function (x) { x.classList.remove('active'); });
+            document.querySelectorAll('.tab-panel').forEach(function (x) { x.classList.remove('active'); });
+            t.classList.add('active');
+            document.querySelector('.tab-' + t.dataset.tab).classList.add('active');
+        });
+    });
+
+    // Remove line (keep allocation table in sync by index)
     document.getElementById('linesBody').addEventListener('click', function (e) {
-        if (e.target.classList.contains('remove-line')) { e.target.closest('tr').remove(); reindex(); updateValidation(); }
+        if (e.target.classList.contains('remove-line')) {
+            var row = e.target.closest('tr');
+            var idx = Array.from(row.parentNode.children).indexOf(row);
+            var allocRow = document.querySelectorAll('#allocBody tr')[idx];
+            if (allocRow) allocRow.remove();
+            row.remove();
+            reindex();
+            updateValidation();
+        }
     });
 
     function reindex() {
-        var rows = document.getElementById('linesBody').rows;
-        for (var i = 0; i < rows.length; i++) {
-            rows[i].querySelectorAll('input,select').forEach(function (inp) {
-                if (inp.name) inp.name = inp.name.replace(/Lines\[\d+\]/, 'Lines[' + i + ']');
-            });
-        }
+        ['linesBody', 'allocBody'].forEach(function (tbodyId) {
+            var tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
+            var rows = tbody.rows;
+            for (var i = 0; i < rows.length; i++) {
+                rows[i].querySelectorAll('input,select').forEach(function (inp) {
+                    if (inp.name) inp.name = inp.name.replace(/Lines\[\d+\]/, 'Lines[' + i + ']');
+                });
+                if (rows[i].dataset && rows[i].hasAttribute('data-idx')) rows[i].setAttribute('data-idx', i);
+            }
+        });
     }
 
     function updateValidation() {
@@ -279,7 +391,60 @@
         inputEl.addEventListener('focus', function () { if (inputEl.value.length >= 2) inputEl.dispatchEvent(new Event('input')); });
     }
 
-    // Default dropdowns
+    // Header warehouse dropdown (document-level)
+    var headerWh = document.getElementById('headerWarehouse');
+    if (headerWh) setupFilteredDropdown(headerWh, document.getElementById('headerWarehouseList'), '/ui/warehouses');
+
+    // DVI tab: list all declarations, pre-select current one, preview on change, attach on button.
+    (function () {
+        var sel = document.getElementById('dviSelect');
+        if (!sel) return;
+        var currentId = '@(Model.Doc.CustomsDeclarationId?.ToString() ?? "")';
+        var dviMap = {};
+
+        function fmtDate(s) {
+            if (!s) return '—';
+            var d = new Date(s);
+            if (isNaN(d)) return s;
+            return ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + '.' + d.getFullYear();
+        }
+
+        function render(d) {
+            document.getElementById('dviMrn').textContent = d?.mrn || '—';
+            document.getElementById('dviLrn').textContent = d?.lrn || '—';
+            document.getElementById('dviRate').textContent = d?.exchangeRate != null ? Number(d.exchangeRate).toFixed(4) : '—';
+            document.getElementById('dviReleaseDate').textContent = fmtDate(d?.releaseDate);
+            document.getElementById('dviFilename').textContent = d?.filename || '—';
+        }
+
+        fetch('/ui/customs-declarations').then(r => r.json()).then(function (items) {
+            items.forEach(function (it) {
+                dviMap[it.id] = it;
+                var opt = document.createElement('option');
+                opt.value = it.id;
+                opt.textContent = (it.mrn || it.filename) + (it.invoiceRef ? ' — ' + it.invoiceRef : '');
+                if (it.id === currentId) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        });
+
+        sel.addEventListener('change', function () {
+            render(dviMap[sel.value]);
+        });
+
+        document.getElementById('dviAttachBtn').addEventListener('click', function () {
+            var id = sel.value || null;
+            fetch('/ui/documents/@Model.Doc.Id/customs-declaration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customsDeclarationId: id })
+            }).then(function (r) {
+                if (r.ok) location.reload();
+            });
+        });
+    })();
+
+    // Default dropdowns (for Aloca pe toate liniile)
     setupFilteredDropdown(document.getElementById('defaultWarehouse'), document.getElementById('defaultWarehouseList'), '/ui/warehouses');
     setupFilteredDropdown(document.getElementById('defaultCostCenter'), document.getElementById('defaultCostCenterList'), '/ui/cost-centers');
 

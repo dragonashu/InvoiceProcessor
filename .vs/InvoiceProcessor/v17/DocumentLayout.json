@@ -3,6 +3,10 @@
   "WorkspaceRootPath": "C:\\it\\InvoiceProcessor\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{A1111111-2222-3333-4444-555555555555}|InvoiceProcessor.Web\\InvoiceProcessor.Web.csproj|c:\\it\\invoiceprocessor\\invoiceprocessor.web\\services\\extraction\\yildizinvoiceextractor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A1111111-2222-3333-4444-555555555555}|InvoiceProcessor.Web\\InvoiceProcessor.Web.csproj|solutionrelative:invoiceprocessor.web\\services\\extraction\\yildizinvoiceextractor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{A1111111-2222-3333-4444-555555555555}|InvoiceProcessor.Web\\InvoiceProcessor.Web.csproj|c:\\it\\invoiceprocessor\\invoiceprocessor.web\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
       "RelativeMoniker": "D:0:0:{A1111111-2222-3333-4444-555555555555}|InvoiceProcessor.Web\\InvoiceProcessor.Web.csproj|solutionrelative:invoiceprocessor.web\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     }
@@ -19,15 +23,27 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "YildizInvoiceExtractor.cs",
+              "DocumentMoniker": "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\Services\\Extraction\\YildizInvoiceExtractor.cs",
+              "RelativeDocumentMoniker": "InvoiceProcessor.Web\\Services\\Extraction\\YildizInvoiceExtractor.cs",
+              "ToolTip": "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\Services\\Extraction\\YildizInvoiceExtractor.cs",
+              "RelativeToolTip": "InvoiceProcessor.Web\\Services\\Extraction\\YildizInvoiceExtractor.cs",
+              "ViewState": "AgIAAPsAAAAAAAAAAAAowPUAAABSAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-23T20:19:35.738Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "appsettings.json",
               "DocumentMoniker": "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\appsettings.json",
               "RelativeDocumentMoniker": "InvoiceProcessor.Web\\appsettings.json",
               "ToolTip": "C:\\it\\InvoiceProcessor\\InvoiceProcessor.Web\\appsettings.json",
               "RelativeToolTip": "InvoiceProcessor.Web\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAOAAAAAAAAAA==",
+              "ViewState": "AgIAABsAAAAAAAAAAAAAACQAAAAUAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-03-16T21:03:04.261Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-03-16T21:03:04.261Z"
             }
           ]
         }

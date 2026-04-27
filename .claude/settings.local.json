@@ -24,7 +24,29 @@
       "Bash(sqlite3 /c/it/InvoiceProcessor/InvoiceProcessor.Web/Data/invoice-processor.db \":*)",
       "Bash(taskkill //F //IM InvoiceProcessor.Web.exe 2)",
       "Bash(/dev/null dotnet:*)",
-      "Bash(taskkill //F //PID 30096)"
+      "Bash(taskkill //F //PID 30096)",
+      "Bash(xargs grep:*)",
+      "Bash(ls *.bat *.sh *.ps1)",
+      "Bash(ls:*)",
+      "Bash(dotnet-script dump.csx)",
+      "Bash(cat .github/workflows/*.yml)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(cp -r publish/* \"C:/InvoiceProcessor/\")",
+      "Bash(echo \"Done - files copied to C:\\\\\\\\InvoiceProcessor\\\\\\\\\")",
+      "Bash(cp:*)",
+      "Bash(echo \"Deployed to C:\\\\\\\\InvoiceProcessor\\\\\\\\\")",
+      "Bash(powershell *)",
+      "Read(//tmp/xlsx_check/**)",
+      "Read(//tmp/xlsx_check/xl/**)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(python3 *)",
+      "Bash(awk 'BEGIN{RS=\"<si>\"}/EF1222/{print NR-1, $0; exit}' /tmp/xlsx_check/xl/sharedStrings.xml)",
+      "Bash(grep -oP '<t[^>]*>[^<]{0,100}EF12[^<]{0,30}</t>' /tmp/xlsx_check/xl/sharedStrings.xml)",
+      "Bash(awk *)",
+      "Bash(grep -oE '<row r=\"3467\"[^/]*>.{0,600}' /tmp/xlsx_check/xl/worksheets/sheet1.xml)",
+      "Bash(grep -oE '<row r=\"11\"[^>]*>.{0,700}' /tmp/xlsx_check/xl/worksheets/sheet1.xml)",
+      "Bash(grep -oE '<row r=\"12\"[^>]*>.{0,700}' /tmp/xlsx_check/xl/worksheets/sheet1.xml)",
+      "Bash(dotnet test *)"
     ]
   }
 }

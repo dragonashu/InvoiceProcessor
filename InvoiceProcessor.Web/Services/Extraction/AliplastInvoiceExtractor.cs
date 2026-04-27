@@ -108,8 +108,19 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
         h.NetTotal = h.GrossTotal; // For 0% VAT invoices, net = gross
         h.VatTotal = 0m;
 
-        h.Currency = "EUR";
+        h.Currency = DetectCurrency(text) ?? "EUR";
         return h;
+    }
+
+    private static string? DetectCurrency(string text)
+    {
+        var matches = Regex.Matches(text, @"\b(EUR|RON|USD|PLN|GBP|CHF|HUF|CZK)\b");
+        if (matches.Count == 0) return null;
+        return matches
+            .Select(m => m.Groups[1].Value)
+            .GroupBy(c => c)
+            .OrderByDescending(g => g.Count())
+            .First().Key;
     }
 
     private static IReadOnlyList<CanonicalInvoiceLine> ExtractLineItems(PdfDocument pdf)
@@ -191,8 +202,9 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
     private record ItemAnchor(string ItemCode, double Y);
 
     // Regex for Aliplast item codes: starts with letter(s), contains digits
+    // Allows underscores (ACFR135_G) and multiple slash groups (GT490/AN/7, EF260/MF/6.6)
     private static readonly Regex ItemCodePattern = new(
-        @"^[A-Z][A-Z\d.]+[\dA-Z](?:/[\w]+)?$", RegexOptions.Compiled);
+        @"^[A-Z][A-Z\d._]+[\dA-Z](?:/[\w.]+)*$", RegexOptions.Compiled);
 
     private static List<ItemAnchor> FindItemAnchors(List<Word> tableWords, ColumnLayout cols)
     {
@@ -236,8 +248,8 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
         var unit = FindWordInRange(tableWords, cols.UnitMinX, cols.UnitMaxX, anchorY, YTolerance);
 
         // Amount - first try same Y as item code
-        var amountStr = FindWordInRange(tableWords, cols.AmountMinX, cols.AmountMaxX, anchorY, YTolerance);
-        var amount = EuropeanNumberParser.TryParse(amountStr) ?? 0m;
+        // Amounts can span multiple words when they have thousands separators (e.g. "5 153,20")
+        var amount = FindAmountInRange(tableWords, cols.AmountMinX, cols.AmountMaxX, anchorY, YTolerance);
 
         // If amount not found at item code Y, search below (multi-row items)
         if (amount == 0)
@@ -248,17 +260,25 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
                 .FirstOrDefault();
             var searchBottom = nextAnchorY.HasValue ? nextAnchorY.Value + 2 : anchorY - 40;
 
-            var amountWord = tableWords
+            var amountWords = tableWords
                 .Where(w => w.BoundingBox.Left >= cols.AmountMinX &&
                             w.BoundingBox.Left < cols.AmountMaxX &&
                             w.BoundingBox.Bottom < anchorY - 2 &&
                             w.BoundingBox.Bottom > searchBottom &&
-                            Regex.IsMatch(w.Text, @"^\d+[.,]\d+$"))
+                            Regex.IsMatch(w.Text, @"^\d[\d.,]*$"))
                 .OrderByDescending(w => w.BoundingBox.Bottom)
-                .FirstOrDefault();
+                .ToList();
 
-            if (amountWord != null)
-                amount = EuropeanNumberParser.TryParse(amountWord.Text) ?? 0m;
+            if (amountWords.Count > 0)
+            {
+                // Group words on the same Y and combine
+                var topY = amountWords[0].BoundingBox.Bottom;
+                var sameRow = amountWords
+                    .Where(w => Math.Abs(w.BoundingBox.Bottom - topY) < YTolerance)
+                    .OrderBy(w => w.BoundingBox.Left)
+                    .Select(w => w.Text);
+                amount = EuropeanNumberParser.TryParse(string.Join("", sameRow)) ?? 0m;
+            }
         }
 
         // Description: words in the description area between this item and the next
@@ -267,6 +287,22 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             .Select(a => (double?)a.Y)
             .FirstOrDefault();
         var descYBottom = nextAnchorYForDesc.HasValue ? nextAnchorYForDesc.Value + 3 : anchorY - 50;
+
+        // Last item on page: cap the description area at the first footer marker below
+        // (e.g. "Order line total", "VAT Report", "Commodity Code") so footer text
+        // doesn't leak into the description.
+        if (!nextAnchorYForDesc.HasValue)
+        {
+            var footerTokens = new HashSet<string> { "VAT", "Order", "Report", "Commodity", "Registers", "Payment", "Terms", "Net", "Gross", "Salesman" };
+            var footerTop = tableWords
+                .Where(w => w.BoundingBox.Bottom < anchorY - 2 &&
+                            footerTokens.Contains(w.Text))
+                .OrderByDescending(w => w.BoundingBox.Bottom)
+                .Select(w => (double?)w.BoundingBox.Bottom)
+                .FirstOrDefault();
+            if (footerTop.HasValue)
+                descYBottom = footerTop.Value + 3;
+        }
 
         var descWords = tableWords
             .Where(w => w.BoundingBox.Left >= 25 &&
@@ -300,13 +336,143 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
         if (string.IsNullOrEmpty(description))
             description = anchor.ItemCode;
 
+        // For FR101 and FR298, append color code from variant line (I: 7016M → FR101/7016M)
+        var codIntern = anchor.ItemCode;
+        if (codIntern is "FR101" or "FR298")
+        {
+            var colorCode = FindVariantColor(tableWords, anchorY, descYBottom);
+            if (colorCode != null)
+                codIntern = $"{codIntern}/{colorCode}";
+        }
+
+        // Variant line: description gets "RAL{digits} {L-value}" appended;
+        // ExternalCode (API) carries only the digits from the I: value (e.g. "N9006M" → "9006").
+        var (descSuffix, apiCode) = ExtractVariantInfo(tableWords, anchorY, descYBottom);
+        if (!string.IsNullOrEmpty(descSuffix))
+            description = string.IsNullOrEmpty(description) ? descSuffix : $"{description} {descSuffix}";
+
         return new CanonicalInvoiceLine(
-            CodIntern: anchor.ItemCode,
+            CodIntern: codIntern,
             DescriptionRaw: description,
             Qty: qty,
             Uom: NormalizeUnit(unit),
             UnitPrice: qty > 0 ? Math.Round(amount / qty, 4) : null,
-            LineTotal: amount);
+            LineTotal: amount,
+            ExternalCode: apiCode);
+    }
+
+    /// Extracts variant-line info.
+    /// Returns (DescriptionSuffix, ApiCode):
+    ///   DescriptionSuffix = e.g. "RAL9006 6,500" — appended to the description.
+    ///   ApiCode = digits pulled from the I: value (e.g. "N9006M" → "9006"); null if no digits.
+    private static (string? DescriptionSuffix, string? ApiCode) ExtractVariantInfo(List<Word> tableWords, double anchorY, double bottomY)
+    {
+        var variantWords = tableWords
+            .Where(w => w.BoundingBox.Bottom < anchorY - 2 &&
+                        w.BoundingBox.Bottom > bottomY)
+            .ToList();
+
+        var iMarker = variantWords
+            .Where(w => w.Text == "I:")
+            .OrderByDescending(w => w.BoundingBox.Bottom)
+            .FirstOrDefault();
+        if (iMarker == null) return (null, null);
+
+        var iValue = variantWords
+            .Where(w => Math.Abs(w.BoundingBox.Bottom - iMarker.BoundingBox.Bottom) < 3 &&
+                        w.BoundingBox.Left > iMarker.BoundingBox.Right - 1 &&
+                        w.BoundingBox.Left < iMarker.BoundingBox.Right + 40 &&
+                        w.Text != "I:" &&
+                        !w.Text.StartsWith("E:") && !w.Text.StartsWith("L:") &&
+                        !Regex.IsMatch(w.Text, @"^[EL]:$"))
+            .OrderBy(w => w.BoundingBox.Left)
+            .FirstOrDefault();
+        if (iValue == null) return (null, null);
+
+        var digitsMatch = Regex.Match(iValue.Text, @"\d+");
+        var apiCode = digitsMatch.Success ? digitsMatch.Value : null;
+
+        // Find L: value on the same variant line — may be merged ("L:6,500") or separate ("L:" + "6,500")
+        string? lValueText = null;
+        var lWord = variantWords
+            .Where(w => Math.Abs(w.BoundingBox.Bottom - iMarker.BoundingBox.Bottom) < 3 &&
+                        w.Text.StartsWith("L:") && w.Text.Length > 2)
+            .FirstOrDefault();
+
+        if (lWord != null)
+        {
+            lValueText = lWord.Text.Substring(2);
+        }
+        else
+        {
+            var lMarker = variantWords
+                .Where(w => w.Text == "L:" &&
+                            Math.Abs(w.BoundingBox.Bottom - iMarker.BoundingBox.Bottom) < 3)
+                .FirstOrDefault();
+            if (lMarker != null)
+            {
+                var lValue = variantWords
+                    .Where(w => Math.Abs(w.BoundingBox.Bottom - lMarker.BoundingBox.Bottom) < 3 &&
+                                w.BoundingBox.Left > lMarker.BoundingBox.Right - 1 &&
+                                w.BoundingBox.Left < lMarker.BoundingBox.Right + 30 &&
+                                Regex.IsMatch(w.Text, @"^[\d.,]+$"))
+                    .OrderBy(w => w.BoundingBox.Left)
+                    .FirstOrDefault();
+                if (lValue != null)
+                    lValueText = lValue.Text;
+            }
+        }
+
+        var parts = new List<string>();
+        if (apiCode != null) parts.Add($"RAL{apiCode}");
+        if (!string.IsNullOrEmpty(lValueText)) parts.Add(lValueText);
+        var suffix = parts.Count > 0 ? string.Join(" ", parts) : null;
+
+        return (suffix, apiCode);
+    }
+
+    /// Finds the color code from the variant line (e.g. "I: 7016M") below an item anchor.
+    private static string? FindVariantColor(List<Word> tableWords, double anchorY, double bottomY)
+    {
+        // Look for "I:" marker below the anchor
+        var iMarker = tableWords
+            .Where(w => w.Text == "I:" &&
+                        w.BoundingBox.Bottom < anchorY - 2 &&
+                        w.BoundingBox.Bottom > bottomY)
+            .OrderByDescending(w => w.BoundingBox.Bottom)
+            .FirstOrDefault();
+
+        if (iMarker == null) return null;
+
+        // The color value is the word immediately to the right of "I:" on the same Y
+        var colorWord = tableWords
+            .Where(w => Math.Abs(w.BoundingBox.Bottom - iMarker.BoundingBox.Bottom) < 3 &&
+                        w.BoundingBox.Left > iMarker.BoundingBox.Right - 1 &&
+                        w.BoundingBox.Left < iMarker.BoundingBox.Right + 30 &&
+                        w.Text != "I:" &&
+                        Regex.IsMatch(w.Text, @"^[A-Z0-9]+$"))
+            .OrderBy(w => w.BoundingBox.Left)
+            .FirstOrDefault();
+
+        return colorWord?.Text;
+    }
+
+    /// Finds an amount value in a column range, combining multi-word amounts like "5 153,20".
+    private static decimal FindAmountInRange(List<Word> words, double minX, double maxX, double y, double yTol)
+    {
+        var candidates = words
+            .Where(w => w.BoundingBox.Left >= minX &&
+                        w.BoundingBox.Left < maxX &&
+                        Math.Abs(w.BoundingBox.Bottom - y) < yTol &&
+                        Regex.IsMatch(w.Text, @"^\d[\d.,]*$"))
+            .OrderBy(w => w.BoundingBox.Left)
+            .Select(w => w.Text)
+            .ToList();
+
+        if (candidates.Count == 0) return 0m;
+
+        // Join all number fragments (e.g. ["5", "153,20"] → "5153,20")
+        return EuropeanNumberParser.TryParse(string.Join("", candidates)) ?? 0m;
     }
 
     private static string? FindWordInRange(List<Word> words, double minX, double maxX, double y, double yTol)

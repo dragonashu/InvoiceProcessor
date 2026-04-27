@@ -30,18 +30,21 @@
             <p style="font-size: 12px; color: var(--c-text-muted); margin-bottom: 12px;">
                 Aceste articole au fost create automat deoarece nu s-au gasit in nomenclator. Verificati codul ERP, denumirea si UM, apoi acceptati sau respingeti.
             </p>
+            <datalist id="itemClassList"></datalist>
             <table class="data-table" id="newItemsTable">
                 <thead>
                     <tr>
                         <th>Cod intern</th>
                         <th>Denumire</th>
                         <th>UM</th>
+                        <th>Clasa</th>
+                        <th>Cod extern</th>
                         <th>Sursa</th>
                         <th style="width:160px;"></th>
                     </tr>
                 </thead>
                 <tbody id="newItemsBody">
-                    <tr><td colspan="5" style="text-align:center; color: var(--c-text-muted); padding: 12px;">Se incarca...</td></tr>
+                    <tr><td colspan="7" style="text-align:center; color: var(--c-text-muted); padding: 12px;">Se incarca...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -77,6 +80,10 @@
                     <input type="text" id="pdfPreviewName" style="padding:4px 8px; font-size:12px; border:1px solid var(--c-border); border-radius:var(--radius); width:220px;" />
                     <label style="font-size:11px; color:var(--c-text-muted);">UM</label>
                     <input type="text" id="pdfPreviewUom" style="padding:4px 8px; font-size:12px; border:1px solid var(--c-border); border-radius:var(--radius); width:50px;" />
+                    <label style="font-size:11px; color:var(--c-text-muted);">Clasa</label>
+                    <input type="text" id="pdfPreviewClass" list="itemClassList" style="padding:4px 8px; font-size:12px; border:1px solid var(--c-border); border-radius:var(--radius); width:220px; font-weight:600;" />
+                    <label style="font-size:11px; color:var(--c-text-muted);">Cod extern</label>
+                    <input type="text" id="pdfPreviewExtCode" style="padding:4px 8px; font-size:12px; border:1px solid var(--c-border); border-radius:var(--radius); width:130px; font-family:var(--font-mono);" />
                     <button type="button" class="btn-accept" id="pdfPreviewAcceptBtn">Accepta</button>
                 </div>
             </div>
@@ -85,9 +92,13 @@
     </div>
     <script>
         (function () {
+            fetch('/ui/item-classes').then(r => r.json()).then(function (classes) {
+                var dl = document.getElementById('itemClassList');
+                if (dl) dl.innerHTML = classes.map(function (n) { return '<option value="' + n.replace(/"/g, '&quot;') + '"></option>'; }).join('');
+            }).catch(function () { });
             fetch('/ui/catalog/new-items').then(r => r.json()).then(function (items) {
                 var tbody = document.getElementById('newItemsBody');
-                if (items.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--c-text-muted); padding:12px;">Niciun articol nou.</td></tr>'; return; }
+                if (items.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--c-text-muted); padding:12px;">Niciun articol nou.</td></tr>'; return; }
                 tbody.innerHTML = items.map(function (it) {
                     var srcHtml = '-';
                     if (it.documentId) {
@@ -98,6 +109,8 @@
                         '<td><input type="text" class="ni-erp" value="' + (it.erpItemCode || '').replace(/"/g, '&quot;') + '" /></td>' +
                         '<td><input type="text" class="ni-name" value="' + (it.name || '').replace(/"/g, '&quot;') + '" /></td>' +
                         '<td><input type="text" class="ni-uom" value="' + (it.uom || '').replace(/"/g, '&quot;') + '" style="width:60px;" /></td>' +
+                        '<td><input type="text" class="ni-class" list="itemClassList" value="' + (it.propertyClass || '').replace(/"/g, '&quot;') + '" style="width:220px; font-weight:600;" /></td>' +
+                        '<td><input type="text" class="ni-ext" value="' + (it.externalCode || '').replace(/"/g, '&quot;') + '" style="width:120px; font-family:var(--font-mono);" /></td>' +
                         '<td>' + srcHtml + '</td>' +
                         '<td style="display:flex; gap:4px;">' +
                             '<button class="btn-accept" onclick="acceptItem(this)">Accepta</button>' +
@@ -117,6 +130,8 @@
                             row.querySelector('.ni-erp').value,
                             row.querySelector('.ni-name').value,
                             row.querySelector('.ni-uom').value,
+                            row.querySelector('.ni-ext').value,
+                            row.querySelector('.ni-class').value,
                             row);
                     });
                 });
@@ -126,7 +141,7 @@
         function acceptItem(btn) {
             var row = btn.closest('tr');
             var id = row.dataset.id;
-            var data = { erpItemCode: row.querySelector('.ni-erp').value, name: row.querySelector('.ni-name').value, uom: row.querySelector('.ni-uom').value };
+            var data = { erpItemCode: row.querySelector('.ni-erp').value, name: row.querySelector('.ni-name').value, uom: row.querySelector('.ni-uom').value, externalCode: row.querySelector('.ni-ext').value, propertyClass: row.querySelector('.ni-class').value };
             fetch('/ui/catalog/new-items/' + id + '/accept', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
                 .then(function (r) {
                     if (r.ok) {
@@ -145,12 +160,12 @@
         function updateNewItemsCount() {
             var remaining = document.querySelectorAll('#newItemsBody tr[data-id]').length;
             if (remaining === 0) {
-                document.getElementById('newItemsBody').innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--c-text-muted); padding:12px;">Toate articolele au fost procesate.</td></tr>';
+                document.getElementById('newItemsBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--c-text-muted); padding:12px;">Toate articolele au fost procesate.</td></tr>';
             }
         }
 
         var _pdfModalRow = null;
-        function openPdfModal(docId, itemId, lineNo, code, name, uom, sourceRow) {
+        function openPdfModal(docId, itemId, lineNo, code, name, uom, extCode, propClass, sourceRow) {
             _pdfModalRow = sourceRow;
             document.getElementById('pdfPreviewFrame').src = '/ui/documents/' + docId + '/pdf#toolbar=1&navpanes=0&view=FitH';
             var info = document.getElementById('pdfPreviewItemInfo');
@@ -160,6 +175,8 @@
             document.getElementById('pdfPreviewCode').value = code;
             document.getElementById('pdfPreviewName').value = name;
             document.getElementById('pdfPreviewUom').value = uom;
+            document.getElementById('pdfPreviewClass').value = propClass || '';
+            document.getElementById('pdfPreviewExtCode').value = extCode || '';
             document.getElementById('pdfPreviewModal').classList.add('active');
         }
         function closePdfModal() {
@@ -172,7 +189,7 @@
         document.getElementById('pdfPreviewAcceptBtn').addEventListener('click', function () {
             var info = document.getElementById('pdfPreviewItemInfo');
             var id = info.dataset.itemId;
-            var data = { erpItemCode: document.getElementById('pdfPreviewCode').value, name: document.getElementById('pdfPreviewName').value, uom: document.getElementById('pdfPreviewUom').value };
+            var data = { erpItemCode: document.getElementById('pdfPreviewCode').value, name: document.getElementById('pdfPreviewName').value, uom: document.getElementById('pdfPreviewUom').value, externalCode: document.getElementById('pdfPreviewExtCode').value, propertyClass: document.getElementById('pdfPreviewClass').value };
             fetch('/ui/catalog/new-items/' + id + '/accept', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
                 .then(function (r) {
                     if (r.ok && _pdfModalRow) {
@@ -211,7 +228,7 @@
 }
 else
 {
-    <form method="post" asp-page-handler="SendJob">
+    <form method="post" asp-page-handler="SendJob" id="sendJobForm">
         @foreach (var group in Model.SupplierGroups)
         {
             <details class="supplier-group" @(group.ReadyCount > 0 ? "open" : "")>
@@ -263,20 +280,21 @@ else
                                 <td class="col-check">
                                     @if (selectable)
                                     {
-                                        <input type="checkbox" name="SelectedDocumentIds" value="@doc.Id" />
+                                        var pendingCount = IndexModel.GetPendingItemsCount(doc);
+                                        <input type="checkbox" name="SelectedDocumentIds" value="@doc.Id" data-pending="@pendingCount" />
                                     }
                                 </td>
                                 <td style="font-weight:600;">@(doc.InvoiceNo ?? doc.Filename)</td>
                                 <td>@doc.InvoiceDate?.ToString("dd/MM/yyyy")</td>
                                 <td class="num">@doc.GrossTotal?.ToString("N2")</td>
                                 <td>
-                                    @if (doc.IsImport)
+                                    @if (doc.Supplier?.InvoiceType == InvoiceProcessor.Web.Enums.InvoiceType.Import)
                                     {
                                         <span class="badge" style="background:#fef3e2; color:#b45309; border:1px solid #f59e0b;">Import</span>
                                     }
                                     else
                                     {
-                                        <span class="badge" style="background:#e0f2fe; color:#0369a1;">Local</span>
+                                        <span class="badge" style="background:#e0f2fe; color:#0369a1;">Intern</span>
                                     }
                                 </td>
                                 <td><span class="badge @IndexModel.StatusCssClass(doc.Status)">@IndexModel.StatusDisplayName(doc.Status)</span></td>
@@ -308,6 +326,25 @@ else
         </div>
     </form>
 
+    <div class="pending-confirm-overlay" id="pendingConfirmModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:var(--c-surface); border-radius:var(--radius-lg); box-shadow:0 20px 60px rgba(0,0,0,0.3); width:480px; max-width:90vw; padding:24px;">
+            <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:16px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e67e22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <div>
+                    <h3 style="margin:0 0 8px 0; font-size:16px; color:#e67e22;">Articole neacceptate</h3>
+                    <p style="margin:0; font-size:13px; line-height:1.5; color:var(--c-text);">
+                        Sunt articole neacceptate inca. Sunteti sigur ca vreti sa continuati? Aceste linii din factura nu vor fi introduse automat.
+                    </p>
+                    <p id="pendingConfirmDetail" style="margin:10px 0 0 0; font-size:12px; color:var(--c-text-muted);"></p>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button type="button" class="btn btn-secondary" id="pendingConfirmCancel">Anuleaza</button>
+                <button type="button" class="btn btn-primary" id="pendingConfirmContinue">Continua</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.querySelectorAll('.select-all-supplier').forEach(function (masterCb) {
             var table = masterCb.closest('table');
@@ -326,5 +363,39 @@ else
                 });
             });
         });
+
+        (function () {
+            var form = document.getElementById('sendJobForm');
+            var modal = document.getElementById('pendingConfirmModal');
+            if (!form || !modal) return;
+            var detail = document.getElementById('pendingConfirmDetail');
+            var cancelBtn = document.getElementById('pendingConfirmCancel');
+            var continueBtn = document.getElementById('pendingConfirmContinue');
+            var bypass = false;
+
+            form.addEventListener('submit', function (e) {
+                if (bypass) return;
+                var selected = form.querySelectorAll('input[name="SelectedDocumentIds"]:checked');
+                var docsWithPending = 0;
+                var totalPendingLines = 0;
+                selected.forEach(function (cb) {
+                    var n = parseInt(cb.dataset.pending || '0', 10);
+                    if (n > 0) { docsWithPending++; totalPendingLines += n; }
+                });
+                if (docsWithPending > 0) {
+                    e.preventDefault();
+                    detail.textContent = docsWithPending + ' factura/i cu ' + totalPendingLines + ' linie/i ce vor fi omise.';
+                    modal.style.display = 'flex';
+                }
+            });
+
+            cancelBtn.addEventListener('click', function () { modal.style.display = 'none'; });
+            modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
+            continueBtn.addEventListener('click', function () {
+                bypass = true;
+                modal.style.display = 'none';
+                form.submit();
+            });
+        })();
     </script>
 }

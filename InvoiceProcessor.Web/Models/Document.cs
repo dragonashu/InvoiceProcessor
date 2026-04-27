@@ -21,6 +21,9 @@ public class Document
     public DateOnly? InvoiceDate { get; set; }
     public decimal? GrossTotal { get; set; }
     public bool IsImport { get; set; }
+    public string? WarehouseCode { get; set; }
+    public Guid? CustomsDeclarationId { get; set; }
+    public CustomsDeclaration? CustomsDeclaration { get; set; }
     public string CorrelationId { get; set; } = Guid.NewGuid().ToString("N");
     public ExtractArtifact? ExtractArtifact { get; set; }
     public ICollection<InvoiceLine> InvoiceLines { get; set; } = [];

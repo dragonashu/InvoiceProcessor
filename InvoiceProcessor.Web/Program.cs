@@ -29,6 +29,7 @@ builder.Services.AddScoped<ISupplierInvoiceExtractor, CortizoInvoiceExtractor>()
 builder.Services.AddScoped<ISupplierInvoiceExtractor, AliplastInvoiceExtractor>();
 builder.Services.AddScoped<ISupplierInvoiceExtractor, YildizInvoiceExtractor>();
 builder.Services.AddScoped<IExtractionPipeline, PdfExtractionPipeline>();
+builder.Services.AddScoped<IDviFolderScanner, DviFolderScanner>();
 builder.Services.AddScoped<IPostingJobService, PostingJobService>();
 
 builder.Services.AddHostedService<DispatcherWorker>();

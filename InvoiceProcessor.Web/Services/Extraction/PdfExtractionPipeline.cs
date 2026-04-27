@@ -31,6 +31,16 @@ public class PdfExtractionPipeline(
         }
     }
 
+    public async Task ReextractDocumentAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        // Reset status so ProcessDocumentAsync proceeds on a document that was previously extracted.
+        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
+        if (document is null) return;
+        document.Status = DocumentStatus.Received;
+        await db.SaveChangesAsync(cancellationToken);
+        await ProcessDocumentAsync(documentId, cancellationToken);
+    }
+
     public async Task ProcessDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {
         var document = await db.Documents.Include(d => d.Supplier).FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
@@ -196,6 +206,21 @@ public class PdfExtractionPipeline(
             {
                 document.Status = DocumentStatus.ReadyToPost;
             }
+
+            // Auto-attach DVI: if a stored declaration's InvoiceRef matches this invoice number, link it.
+            if (document.CustomsDeclarationId is null && !string.IsNullOrWhiteSpace(document.InvoiceNo))
+            {
+                var dvis = await db.CustomsDeclarations
+                    .Where(d => d.InvoiceRef != null)
+                    .ToListAsync(cancellationToken);
+                var match = dvis.FirstOrDefault(d => InvoiceRefMatcher.Matches(document.InvoiceNo, d.InvoiceRef));
+                if (match != null)
+                {
+                    document.CustomsDeclarationId = match.Id;
+                    logger.LogInformation("Document {DocumentId} auto-attached DVI {Dvi}", documentId, match.Filename);
+                }
+            }
+
             await db.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Processed document {DocumentId}", documentId);
         }

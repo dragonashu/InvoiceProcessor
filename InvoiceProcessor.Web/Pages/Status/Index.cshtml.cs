@@ -16,6 +16,8 @@ public class IndexModel(AppDbContext db) : PageModel
     public Guid? SupplierId { get; set; }
 
     public List<PostingJob> Jobs { get; set; } = [];
+    public List<PostingJob> ActiveJobs { get; set; } = [];
+    public List<PostingJob> FinalizedJobs { get; set; } = [];
     public string? Message { get; set; }
 
     public async Task OnGetAsync(string? message, CancellationToken cancellationToken)
@@ -92,5 +94,8 @@ public class IndexModel(AppDbContext db) : PageModel
         if (SupplierId.HasValue) query = query.Where(j => j.Document.SupplierId == SupplierId);
 
         Jobs = await query.OrderByDescending(j => j.CreatedAt).Take(500).ToListAsync(cancellationToken);
+
+        ActiveJobs = Jobs.Where(j => j.Status is not (PostingJobStatus.Success or PostingJobStatus.Partial)).ToList();
+        FinalizedJobs = Jobs.Where(j => j.Status is PostingJobStatus.Success or PostingJobStatus.Partial).ToList();
     }
 }

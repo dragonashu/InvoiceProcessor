@@ -38,7 +38,7 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
         // Load all documents in actionable statuses, grouped by supplier
         var documents = await db.Documents
             .Include(d => d.Supplier)
-            .Include(d => d.InvoiceLines)
+            .Include(d => d.InvoiceLines).ThenInclude(l => l.MatchedItem)
             .Where(d => ActionableStatuses.Contains(d.Status))
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -65,7 +65,7 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
             .ToList();
 
         SupplierGroups = groups;
-        NewItemsCount = await db.CatalogItems.CountAsync(c => c.IsAutoCreated && c.Active, cancellationToken);
+        NewItemsCount = await db.CatalogItems.CountAsync(c => c.IsAutoCreated && c.AcceptedAt == null && c.Active, cancellationToken);
     }
 
     public async Task<IActionResult> OnPostRefreshAsync(CancellationToken cancellationToken)
@@ -95,6 +95,13 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
         var autoCreated = lines.Count(l => l.MatchReason == "auto-created");
         return (matched, lines.Count, autoCreated);
     }
+
+    // Lines whose matched catalog item is still pending review (auto-created, not yet accepted).
+    // These will be skipped when posting to the robot.
+    public static int GetPendingItemsCount(Document doc) =>
+        doc.InvoiceLines.Count(l => l.MatchedItem != null
+                                    && l.MatchedItem.IsAutoCreated
+                                    && l.MatchedItem.AcceptedAt == null);
 
     public static string StatusCssClass(DocumentStatus status) => status switch
     {

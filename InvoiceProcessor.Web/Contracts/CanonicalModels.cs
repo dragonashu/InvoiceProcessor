@@ -11,7 +11,7 @@ public record CanonicalInvoice(
     IReadOnlyList<CanonicalInvoiceLine> Lines,
     CanonicalMetadata Metadata);
 
-public record CanonicalInvoiceLine(string? CodIntern, string DescriptionRaw, decimal Qty, string? Uom, decimal? UnitPrice, decimal LineTotal, string? Bare = null);
+public record CanonicalInvoiceLine(string? CodIntern, string DescriptionRaw, decimal Qty, string? Uom, decimal? UnitPrice, decimal LineTotal, string? Bare = null, string? ExternalCode = null, string? PropertyClass = null);
 
 public record CanonicalMaterialsList(
     string? JobReference,
@@ -22,8 +22,8 @@ public record CanonicalMaterialLine(string Description, decimal Qty, string? Uom
 
 public record CanonicalMetadata(decimal Confidence, string Strategy, string? Notes = null);
 
-public record ReadyToPostInvoicePayload(Guid PostingJobId, Guid DocumentId, string CorrelationId, string? SupplierErpName, bool IsImport, string? InvoiceNo, DateOnly? InvoiceDate, string? Currency, decimal? GrossTotal, IReadOnlyList<ReadyToPostLine> Lines);
-public record ReadyToPostLine(int LineNo, string Description, decimal Qty, string? Uom, decimal Amount, string? ErpItemCode, string? ErpItemName, decimal Confidence, string Reason, string? WarehouseCode = null, string? CostCenterCode = null);
+public record ReadyToPostInvoicePayload(Guid PostingJobId, Guid DocumentId, string CorrelationId, string? SupplierErpName, bool IsImport, string InvoiceType, string TaxationType, string TransactionType, string? InvoiceNo, DateOnly? InvoiceDate, string? Currency, decimal? GrossTotal, string? WarehouseCode, string? CustomsMrn, string? CustomsLrn, decimal? CustomsExchangeRate, DateOnly? CustomsReleaseDate, IReadOnlyList<ReadyToPostLine> Lines);
+public record ReadyToPostLine(int LineNo, string Description, decimal Qty, string? Uom, decimal Amount, string? ErpItemCode, string? ErpItemName, decimal Confidence, string Reason, string? WarehouseCode = null, string? CostCenterCode = null, string? ExternalCode = null, string? PropertyClass = null);
 
 public record RobotCompleteRequest(string Result, string? ErpDocNo, string? ErrorCategory, string? ErrorMessage, string? ResultJson);
 
@@ -35,8 +35,8 @@ public record SupplierRequest(string Name, string? ErpName, string? VatNo, strin
 
 public record SaveMappingRequest(Guid SupplierId, string VendorCode, Guid CatalogItemId, Guid? InvoiceLineId);
 
-public record AcceptNewItemRequest(string ErpItemCode, string Name, string? Uom);
+public record AcceptNewItemRequest(string ErpItemCode, string Name, string? Uom, string? ExternalCode = null, string? PropertyClass = null);
 
-public record CatalogItemPayload(Guid CatalogJobId, Guid CatalogItemId, string Code, string Name, string? Uom);
+public record CatalogItemPayload(Guid CatalogJobId, Guid CatalogItemId, string Code, string Name, string? Uom, string? ExternalCode = null, string? PropertyClass = null);
 
 public record CatalogJobCompleteRequest(string Result, string? InternalCode, string? ErrorMessage, string? ResultJson);

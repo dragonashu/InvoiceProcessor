@@ -24,6 +24,8 @@ public class StorageOptions
     public string InboxRoot { get; set; } = "./data/inbox";
     public string StoreRoot { get; set; } = "./data/store";
     public string SourceFolder { get; set; } = "./samples";
+    public string DviFolder { get; set; } = "./DVI";
+    public string DviStoreRoot { get; set; } = "./data/dvi";
 }
 
 public class ExtractionOptions

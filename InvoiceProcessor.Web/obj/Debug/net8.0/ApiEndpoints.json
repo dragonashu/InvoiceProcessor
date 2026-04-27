@@ -253,6 +253,48 @@
   },
   {
     "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "GetCustomsDeclarations",
+    "RelativePath": "ui/customs-declarations",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "UploadCustomsDeclaration",
+    "RelativePath": "ui/customs-declarations",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "file",
+        "Type": "Microsoft.AspNetCore.Http.IFormFile",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "DeleteCustomsDeclaration",
+    "RelativePath": "ui/customs-declarations/{id}",
+    "HttpMethod": "DELETE",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Guid",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
     "Method": "GetDocuments",
     "RelativePath": "ui/documents",
     "HttpMethod": "GET",
@@ -290,6 +332,27 @@
   },
   {
     "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "AttachCustomsDeclaration",
+    "RelativePath": "ui/documents/{id}/customs-declaration",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Guid",
+        "IsRequired": true
+      },
+      {
+        "Name": "request",
+        "Type": "InvoiceProcessor.Web.Controllers.UiController\u002BAttachCustomsRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
     "Method": "GetPdf",
     "RelativePath": "ui/documents/{id}/pdf",
     "HttpMethod": "GET",
@@ -302,6 +365,16 @@
         "IsRequired": true
       }
     ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "GetItemClasses",
+    "RelativePath": "ui/item-classes",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
     "ReturnTypes": []
   },
   {
