@@ -357,7 +357,7 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
         return char.ToUpperInvariant(trimmed[0]) + trimmed[1..].ToLowerInvariant();
     }
 
-    public async Task<(int added, int updated)> ImportCatalogXlsxAsync(Stream stream, CancellationToken cancellationToken)
+    public async Task<(int added, int updated)> ImportCatalogXlsxAsync(Stream stream, CatalogImportSource source, string? fileName, CancellationToken cancellationToken)
     {
         var rows = XlsxReader.ReadRows(stream);
 
@@ -433,8 +433,17 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
             }
         }
 
+        db.CatalogImportLogs.Add(new CatalogImportLog
+        {
+            ImportedAt = DateTime.UtcNow,
+            Source = source,
+            AddedCount = added,
+            UpdatedCount = updated,
+            FileName = fileName
+        });
+
         await db.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Catalog import: {Added} added, {Updated} updated", added, updated);
+        logger.LogInformation("Catalog import ({Source}): {Added} added, {Updated} updated", source, added, updated);
         return (added, updated);
     }
 

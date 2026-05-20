@@ -46,7 +46,9 @@
       "Bash(grep -oE '<row r=\"3467\"[^/]*>.{0,600}' /tmp/xlsx_check/xl/worksheets/sheet1.xml)",
       "Bash(grep -oE '<row r=\"11\"[^>]*>.{0,700}' /tmp/xlsx_check/xl/worksheets/sheet1.xml)",
       "Bash(grep -oE '<row r=\"12\"[^>]*>.{0,700}' /tmp/xlsx_check/xl/worksheets/sheet1.xml)",
-      "Bash(dotnet test *)"
+      "Bash(dotnet test *)",
+      "PowerShell(Get-ChildItem -Path C:\\\\it\\\\InvoiceProcessor -Force -Directory | Where-Object { $_.Name -match 'publish' } | Format-Table Name, LastWriteTime -AutoSize)",
+      "PowerShell(Get-ChildItem *)"
     ]
   }
 }

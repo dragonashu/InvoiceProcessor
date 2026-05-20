@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CatalogJob> CatalogJobs => Set<CatalogJob>();
     public DbSet<ItemClass> ItemClasses => Set<ItemClass>();
     public DbSet<CustomsDeclaration> CustomsDeclarations => Set<CustomsDeclaration>();
+    public DbSet<CatalogImportLog> CatalogImportLogs => Set<CatalogImportLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

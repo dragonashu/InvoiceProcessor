@@ -20,6 +20,7 @@ public class IndexModel(AppDbContext db, IMatchingEngine matchingEngine, IExtrac
     public int ProposedItemCount { get; set; }
     public int ItemClassCount { get; set; }
     public int DviCount { get; set; }
+    public CatalogImportLog? LastCatalogImport { get; set; }
     public string? Message { get; set; }
 
     [BindProperty] public Guid? EditId { get; set; }
@@ -48,6 +49,9 @@ public class IndexModel(AppDbContext db, IMatchingEngine matchingEngine, IExtrac
         ProposedItemCount = await db.CatalogItems.CountAsync(c => c.IsAutoCreated && c.AcceptedAt == null && c.Active, ct);
         ItemClassCount = await db.ItemClasses.CountAsync(ic => ic.Active, ct);
         DviCount = await db.CustomsDeclarations.CountAsync(ct);
+        LastCatalogImport = await db.CatalogImportLogs
+            .OrderByDescending(l => l.ImportedAt)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<IActionResult> OnPostImportDviAsync([FromServices] Services.Extraction.IDviFolderScanner scanner, CancellationToken ct)
@@ -157,7 +161,8 @@ public class IndexModel(AppDbContext db, IMatchingEngine matchingEngine, IExtrac
             return RedirectToPage(new { message = "Selecteaza un fisier XLSX." });
 
         await using var stream = CatalogFile.OpenReadStream();
-        var (added, updated) = await matchingEngine.ImportCatalogXlsxAsync(stream, ct);
+        var (added, updated) = await matchingEngine.ImportCatalogXlsxAsync(
+            stream, CatalogImportSource.Manual, CatalogFile.FileName, ct);
         return RedirectToPage(new { message = $"Catalog importat: {added} articole noi, {updated} actualizate." });
     }
 

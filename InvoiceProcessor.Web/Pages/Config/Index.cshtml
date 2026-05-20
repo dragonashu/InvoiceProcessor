@@ -175,6 +175,25 @@
                     </div>
                 </div>
             </form>
+            @if (Model.LastCatalogImport is not null)
+            {
+                var imp = Model.LastCatalogImport;
+                var srcManual = imp.Source == InvoiceProcessor.Web.Models.CatalogImportSource.Manual;
+                <div style="margin-top: 12px; font-size: 12px; color: var(--c-text-muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span>Ultimul import:</span>
+                    <span class="badge @(srcManual ? "status-posted" : "status-processing")">@(srcManual ? "Manual" : "API")</span>
+                    <strong style="color: var(--c-text);">@imp.ImportedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</strong>
+                    <span>· @imp.AddedCount noi, @imp.UpdatedCount actualizate</span>
+                    @if (!string.IsNullOrWhiteSpace(imp.FileName))
+                    {
+                        <span style="font-family: var(--font-mono);">· @imp.FileName</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div style="margin-top: 12px; font-size: 12px; color: var(--c-text-muted);">Niciun import de catalog inregistrat inca.</div>
+            }
             <div style="display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--c-border-light); flex-wrap: wrap; align-items: center;">
                 <form method="post" style="margin:0;">
                     <button type="submit" asp-page-handler="Rematch" class="btn btn-secondary" style="color: var(--c-primary);"

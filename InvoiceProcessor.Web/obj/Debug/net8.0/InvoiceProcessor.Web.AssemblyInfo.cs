@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("InvoiceProcessor.Web")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b77a9d9a0309e6a0e4e21d868a73a7cdd8b5b6cb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c41d55ba68e0d07816c1860423f1dc996168e25e")]
 [assembly: System.Reflection.AssemblyProductAttribute("InvoiceProcessor.Web")]
 [assembly: System.Reflection.AssemblyTitleAttribute("InvoiceProcessor.Web")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -164,8 +164,11 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
 
     private static ColumnLayout? FindColumnLayout(List<Word> words)
     {
-        // Find "Quantity" header word
-        var qty = words.FirstOrDefault(w => w.Text == "Quantity");
+        // Find leftmost "Quantity" header word (avoids picking up other occurrences)
+        var qty = words
+            .Where(w => w.Text == "Quantity")
+            .OrderBy(w => w.BoundingBox.Left)
+            .FirstOrDefault();
         if (qty == null) return null;
 
         // Find "Amount" header at same Y, to the right
@@ -175,12 +178,15 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             w.BoundingBox.Left > qty.BoundingBox.Right);
         if (amount == null) return null;
 
-        // Find "Unit" header between Qty and Amount
-        var unit = words.FirstOrDefault(w =>
-            w.Text == "Unit" &&
-            Math.Abs(w.BoundingBox.Bottom - qty.BoundingBox.Bottom) < 5 &&
-            w.BoundingBox.Left > qty.BoundingBox.Left &&
-            w.BoundingBox.Left < amount.BoundingBox.Left);
+        // Find leftmost "Unit" header between Qty and Amount — the column header,
+        // not the "Unit" part of "Unit price"
+        var unit = words
+            .Where(w => w.Text == "Unit" &&
+                        Math.Abs(w.BoundingBox.Bottom - qty.BoundingBox.Bottom) < 5 &&
+                        w.BoundingBox.Left > qty.BoundingBox.Left &&
+                        w.BoundingBox.Left < amount.BoundingBox.Left)
+            .OrderBy(w => w.BoundingBox.Left)
+            .FirstOrDefault();
 
         // Find "VAT" header after Amount
         var vat = words.FirstOrDefault(w =>
@@ -188,13 +194,28 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             Math.Abs(w.BoundingBox.Bottom - qty.BoundingBox.Bottom) < 5 &&
             w.BoundingBox.Left > amount.BoundingBox.Left);
 
+        // The header that bounds the Unit column on the right. In the new format it's "M"
+        // (length-in-meters column); in the old format it's the "Unit" of "Unit price".
+        double? unitRightBound = null;
+        if (unit != null)
+        {
+            unitRightBound = words
+                .Where(w => (w.Text == "M" || w.Text == "Unit") &&
+                            Math.Abs(w.BoundingBox.Bottom - qty.BoundingBox.Bottom) < 5 &&
+                            w.BoundingBox.Left > unit.BoundingBox.Right &&
+                            w.BoundingBox.Left < amount.BoundingBox.Left)
+                .OrderBy(w => w.BoundingBox.Left)
+                .Select(w => (double?)w.BoundingBox.Left)
+                .FirstOrDefault();
+        }
+
         return new ColumnLayout(
             HeaderY: qty.BoundingBox.Bottom,
             ItemMaxX: qty.BoundingBox.Left - 5,
             QtyMinX: qty.BoundingBox.Left - 10,
             QtyMaxX: unit?.BoundingBox.Left - 3 ?? qty.BoundingBox.Right + 25,
             UnitMinX: unit?.BoundingBox.Left - 3 ?? qty.BoundingBox.Right + 5,
-            UnitMaxX: unit?.BoundingBox.Right + 50 ?? qty.BoundingBox.Right + 80,
+            UnitMaxX: unitRightBound - 3 ?? unit?.BoundingBox.Right + 50 ?? qty.BoundingBox.Right + 80,
             AmountMinX: amount.BoundingBox.Left - 20,
             AmountMaxX: vat?.BoundingBox.Left - 3 ?? amount.BoundingBox.Right + 30);
     }
@@ -220,12 +241,13 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
                 w.Text.Any(char.IsLetter) &&
                 ItemCodePattern.IsMatch(w.Text))
             {
-                // Verify: there should be a quantity value at similar Y in the Qty column
+                // Verify: there should be a quantity value at similar Y in the Qty column.
+                // Old format always prints decimals (20,00); new format uses plain integers (6, 3).
                 var hasQty = tableWords.Any(q =>
                     q.BoundingBox.Left >= cols.QtyMinX &&
                     q.BoundingBox.Left < cols.QtyMaxX &&
                     Math.Abs(q.BoundingBox.Bottom - w.BoundingBox.Bottom) < YTolerance &&
-                    Regex.IsMatch(q.Text, @"^\d+[.,]\d+$"));
+                    Regex.IsMatch(q.Text, @"^\d+(?:[.,]\d+)?$"));
 
                 if (hasQty)
                     anchors.Add(new ItemAnchor(w.Text, w.BoundingBox.Bottom));
@@ -293,7 +315,7 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
         // doesn't leak into the description.
         if (!nextAnchorYForDesc.HasValue)
         {
-            var footerTokens = new HashSet<string> { "VAT", "Order", "Report", "Commodity", "Registers", "Payment", "Terms", "Net", "Gross", "Salesman" };
+            var footerTokens = new HashSet<string> { "VAT", "Order", "Report", "Commodity", "Registers", "Payment", "Terms", "Net", "Gross", "Salesman", "Sales" };
             var footerTop = tableWords
                 .Where(w => w.BoundingBox.Bottom < anchorY - 2 &&
                             footerTokens.Contains(w.Text))
@@ -315,8 +337,10 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
                         !(Regex.IsMatch(w.Text, @"^\d{1,3}$") && w.BoundingBox.Left < 40) &&
                         // Exclude order numbers (7-digit)
                         !Regex.IsMatch(w.Text, @"^\d{7}$") &&
-                        // Exclude Kod PCN/CN lines and PCN codes (8-digit)
+                        // Exclude commodity-code prefix tokens — old format prints
+                        // "Kod PCN/CN: 83024190", new format prints "Commodity code: 83024190".
                         !w.Text.StartsWith("Kod") && w.Text != "PCN/CN:" &&
+                        w.Text != "Commodity" && w.Text != "code:" &&
                         !Regex.IsMatch(w.Text, @"^\d{8}$") &&
                         // Exclude variant markers (I:, E:, L:) and their values (N9016M, LAN, MF, ZN, 3000, 9010)
                         !Regex.IsMatch(w.Text, @"^[IEL]:$") &&

@@ -158,4 +158,3 @@ C:\it\InvoiceProcessor\InvoiceProcessor.Web\obj\Debug\net8.0\refint\InvoiceProce
 C:\it\InvoiceProcessor\InvoiceProcessor.Web\obj\Debug\net8.0\InvoiceProcessor.Web.pdb
 C:\it\InvoiceProcessor\InvoiceProcessor.Web\obj\Debug\net8.0\InvoiceProcessor.Web.genruntimeconfig.cache
 C:\it\InvoiceProcessor\InvoiceProcessor.Web\obj\Debug\net8.0\ref\InvoiceProcessor.Web.dll
-C:\it\InvoiceProcessor\InvoiceProcessor.Web\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
