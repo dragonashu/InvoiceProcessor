@@ -2,17 +2,21 @@
 @model InvoiceProcessor.Web.Pages.Inbox.PreviewModel
 
 <style>
-    .lines-scroll { overflow-x: auto; }
+    /* Always-visible horizontal scrollbar on the lines table (vertical scroll is handled
+       by the details panel). `scroll` keeps the bar present even when it isn't needed. */
+    .lines-scroll { overflow-x: scroll; }
     #linesTable.show-desc { min-width: 1200px; }
     #linesTable.show-desc .desc-col { min-width: 320px; white-space: normal; }
 </style>
 
+@{ var transferBlocked = Model.Checks is { TransferAllowed: false }; }
+
 <div class="preview-topbar">
     <h2>@(Model.Doc.InvoiceNo ?? Model.Doc.Filename)</h2>
     <div style="display: flex; gap: 8px;">
-        <form method="post" asp-page-handler="SendToRobot" asp-route-id="@Model.Doc.Id" style="margin: 0;">
-            <button type="submit" class="btn btn-primary"
-                    onclick="return confirm('Trimiti factura la robot?')">
+        <form method="post" asp-page-handler="SendToRobot" asp-route-id="@Model.Doc.Id" style="margin: 0;" id="sendRobotForm">
+            <button type="submit" class="btn btn-primary" id="sendRobotBtn" @(transferBlocked ? "disabled" : null)
+                    title="@(transferBlocked ? "Transfer blocat: verificarile de extractie au esuat." : "Trimite factura la robot")">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 Trimite la robot
             </button>
@@ -24,6 +28,26 @@
         <a href="/Inbox" class="btn btn-secondary">Inapoi la Inbox</a>
     </div>
 </div>
+
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-success">@Model.Message</div>
+}
+
+@if (transferBlocked && Model.Checks is not null)
+{
+    <div class="alert alert-danger" style="margin-bottom:16px;">
+        <strong>Transfer blocat.</strong>
+        @if (!Model.Checks.CountMatches)
+        {
+            <span>Numar linii extrase (@Model.Checks.ActualLineCount) difera de cele din PDF (@Model.Checks.ExpectedLineCount).</span>
+        }
+        @if (!Model.Checks.SumMatches)
+        {
+            <span>Suma liniilor (@Model.Checks.LineSum.ToString("N2")) difera de total (@Model.Checks.CompareTotal.ToString("N2")).</span>
+        }
+    </div>
+}
 
 <div class="preview-container">
     <div class="pdf-panel">
@@ -59,11 +83,11 @@
                     </label>
                 </div>
 
-                var lineSum = inv.Lines.Sum(l => l.LineTotal);
-                var compareTotal = inv.NetTotal ?? inv.GrossTotal ?? 0m;
+                var checks = Model.Checks!;
+                var lineSum = checks.LineSum;
+                var compareTotal = checks.CompareTotal;
                 var compareLabel = inv.NetTotal.HasValue ? "total net" : "total brut";
-                var tolerance = Math.Max(compareTotal * 0.01m, 0.5m);
-                var sumMatches = compareTotal != 0m && Math.Abs(lineSum - compareTotal) <= tolerance;
+                var sumMatches = checks.SumMatches;
 
                 <div class="lines-scroll">
                 <table class="lines-table" id="linesTable">
@@ -110,6 +134,16 @@
                                 &nbsp; <strong>@lineSum.ToString("N2")</strong>
                             </td>
                         </tr>
+                        @if (checks.ExpectedLineCount.HasValue)
+                        {
+                            <tr class="totals-row @(checks.CountMatches ? "validation-pass" : "validation-fail")">
+                                <td colspan="100%" style="text-align:right;">
+                                    <span class="validation-icon">@(checks.CountMatches ? "\u2713" : "\u2717")</span>
+                                    Linii extrase vs linii in PDF (@checks.ExpectedLineCount)
+                                    &nbsp; <strong>@checks.ActualLineCount</strong>
+                                </td>
+                            </tr>
+                        }
                     </tbody>
                 </table>
                 </div>
@@ -137,4 +171,23 @@
         var tbl = document.getElementById('linesTable');
         if (tbl) tbl.classList.toggle('show-desc', showDesc);
     });
+</script>
+
+<partial name="_NewItemsModal" />
+<script>
+    // Sending from Preview: if this invoice has new items, step through them in the
+    // modal first (same flow as the inbox bulk send), then post.
+    (function () {
+        var form = document.getElementById('sendRobotForm');
+        if (!form) return;
+        var posted = false;
+        form.addEventListener('submit', function (e) {
+            if (posted) return;
+            if (@Model.PendingNewItems <= 0) return; // no new items — post directly
+            e.preventDefault();
+            window.NewItemsModal.run(
+                [{ docId: '@Model.Doc.Id', invoiceNo: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Doc.InvoiceNo ?? Model.Doc.Filename)) }],
+                function () { posted = true; form.submit(); });
+        });
+    })();
 </script>

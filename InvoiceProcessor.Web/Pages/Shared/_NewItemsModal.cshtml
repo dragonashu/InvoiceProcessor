@@ -1,0 +1,259 @@
+@*
+    New-items review modal — shared by the Inbox (bulk send) and Preview (single send).
+    Page JS drives it via:  window.NewItemsModal.run([{ docId, invoiceNo }], onAllResolved)
+    The callback runs once every queued invoice has been stepped through and its
+    new items accepted/rejected. Cancelling aborts without invoking the callback.
+*@
+
+<datalist id="itemClassList"></datalist>
+
+<style>
+    .ni-modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .ni-modal-overlay.active { display: flex; }
+    .ni-modal { background: var(--c-surface); border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgba(0,0,0,0.3); width: 92vw; height: 90vh; display: flex; flex-direction: column; }
+    .ni-modal-header { padding: 12px 20px; border-bottom: 1px solid var(--c-border); display: flex; align-items: center; gap: 12px; }
+    .ni-modal-header h3 { font-size: 15px; margin: 0; flex: 1; }
+    .ni-progress { font-size: 12px; color: var(--c-text-muted); }
+    .ni-modal-body { flex: 1; display: flex; min-height: 0; }
+    .ni-pdf-pane { flex: 1.2; border-right: 1px solid var(--c-border); }
+    .ni-pdf-pane iframe { width: 100%; height: 100%; border: none; }
+    .ni-items-pane { flex: 1; padding: 16px 20px; overflow-y: auto; }
+    .ni-hint { font-size: 12px; color: var(--c-text-muted); margin: 0 0 12px; }
+    .ni-bulk { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .ni-bulk label { font-size: 12px; color: var(--c-text-muted); }
+    .ni-bulk input { padding: 6px 8px; font-size: 13px; border: 1px solid var(--c-border); border-radius: var(--radius); background: var(--c-surface); color: var(--c-text); }
+    .ni-modal-footer { padding: 12px 20px; border-top: 1px solid var(--c-border); display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+    .ni-error { color: var(--c-danger); font-size: 13px; margin-right: auto; }
+    #niTable input { padding: 5px 8px; font-size: 13px; border: 1px solid var(--c-border); border-radius: var(--radius); width: 100%; font-family: inherit; background: var(--c-surface); color: var(--c-text); }
+    #niTable input:focus { outline: none; border-color: #e67e22; box-shadow: 0 0 0 2px rgba(230,126,34,0.15); }
+    #niTable .ni-class { font-weight: 600; }
+    .btn-reject { padding: 4px 10px; font-size: 12px; border: 1px solid var(--c-danger); background: none; color: var(--c-danger); border-radius: var(--radius); cursor: pointer; }
+    .btn-reject:hover { background: var(--c-danger-bg); }
+</style>
+
+<div class="ni-modal-overlay" id="newItemsModal">
+    <div class="ni-modal">
+        <div class="ni-modal-header">
+            <h3>Articole noi — <span id="niInvoiceNo"></span></h3>
+            <span class="ni-progress" id="niProgress"></span>
+            <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:13px;" id="niCancelBtn">Anuleaza</button>
+        </div>
+        <div class="ni-modal-body">
+            <div class="ni-pdf-pane">
+                <iframe id="niPdfFrame" src=""></iframe>
+            </div>
+            <div class="ni-items-pane">
+                <p class="ni-hint">Aceste articole nu s-au gasit in nomenclator. Atribuiti o clasa fiecaruia (sau tuturor deodata), verificati datele, apoi acceptati pentru a continua trimiterea la robot.</p>
+                <div class="ni-bulk">
+                    <label>Clasa pentru toate</label>
+                    <input type="text" id="niBulkClass" list="itemClassList" placeholder="Clasa..." style="width:220px;" />
+                    <button type="button" class="btn btn-secondary" style="padding:5px 12px; font-size:12px;" id="niApplyAllBtn">Aplica la toate</button>
+                </div>
+                <table class="data-table" id="niTable">
+                    <thead>
+                        <tr>
+                            <th>Cod intern</th>
+                            <th>Denumire</th>
+                            <th>UM</th>
+                            <th>Clasa</th>
+                            <th>Cod extern</th>
+                            <th>Sursa</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="niBody">
+                        <tr><td colspan="7" style="text-align:center; color:var(--c-text-muted); padding:12px;">Se incarca...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="ni-modal-footer">
+            <span class="ni-error" id="niError"></span>
+            <button type="button" class="btn btn-primary" id="niAcceptBtn">Accepta si continua</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var modal = document.getElementById('newItemsModal');
+        if (!modal) return;
+
+        function esc(v) { return (v == null ? '' : String(v)).replace(/"/g, '&quot;'); }
+
+        // Item-class suggestions for the datalist
+        fetch('/ui/item-classes').then(function (r) { return r.json(); }).then(function (classes) {
+            var dl = document.getElementById('itemClassList');
+            if (dl) dl.innerHTML = classes.map(function (n) {
+                return '<option value="' + esc(n) + '"></option>';
+            }).join('');
+        }).catch(function () { });
+
+        var queue = [];        // invoices to step through: { docId, invoiceNo }
+        var queueIndex = 0;
+        var onComplete = null; // invoked once all invoices are resolved
+
+        // Public entry point. docs = [{ docId, invoiceNo }]; completeCb runs after
+        // the last invoice is resolved (not called if the user cancels).
+        function run(docs, completeCb) {
+            queue = docs || [];
+            onComplete = completeCb || null;
+            queueIndex = 0;
+            if (queue.length === 0) { finish(); return; }
+            openModalForCurrent();
+        }
+
+        function finish() {
+            var cb = onComplete;
+            onComplete = null;
+            if (cb) cb();
+        }
+
+        function openModalForCurrent() {
+            var entry = queue[queueIndex];
+            document.getElementById('niInvoiceNo').textContent = entry.invoiceNo;
+            document.getElementById('niProgress').textContent =
+                'Factura ' + (queueIndex + 1) + ' din ' + queue.length;
+            document.getElementById('niError').textContent = '';
+            document.getElementById('niBulkClass').value = '';
+            document.getElementById('niPdfFrame').src =
+                '/ui/documents/' + entry.docId + '/pdf#toolbar=1&navpanes=0&view=FitH';
+            var body = document.getElementById('niBody');
+            body.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--c-text-muted); padding:12px;">Se incarca...</td></tr>';
+            modal.classList.add('active');
+
+            fetch('/ui/documents/' + entry.docId + '/new-items')
+                .then(function (r) { return r.json(); })
+                .then(function (items) {
+                    // Show the modal for every invoice in the queue. An empty list
+                    // means the items were already accepted via an earlier invoice
+                    // (shared catalog items) — keep the invoice visible so the user
+                    // steps through each one instead of it being silently skipped.
+                    if (!items || items.length === 0) {
+                        body.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--c-text-muted); padding:16px;">' +
+                            'Articolele noi ale acestei facturi au fost deja procesate. Apasati "Accepta si continua".</td></tr>';
+                        return;
+                    }
+                    body.innerHTML = items.map(renderRow).join('');
+                })
+                .catch(function () {
+                    document.getElementById('niError').textContent = 'Eroare la incarcarea articolelor noi.';
+                });
+        }
+
+        function renderRow(it) {
+            return '<tr data-id="' + it.id + '">' +
+                '<td><input type="text" class="ni-erp" value="' + esc(it.erpItemCode) + '" /></td>' +
+                '<td><input type="text" class="ni-name" value="' + esc(it.name) + '" /></td>' +
+                '<td><input type="text" class="ni-uom" value="' + esc(it.uom) + '" style="width:55px;" /></td>' +
+                '<td><input type="text" class="ni-class" list="itemClassList" value="' + esc(it.propertyClass) + '" /></td>' +
+                '<td><input type="text" class="ni-ext" value="' + esc(it.externalCode) + '" style="font-family:var(--font-mono);" /></td>' +
+                '<td style="white-space:nowrap; color:var(--c-text-muted); font-size:12px;">' + (it.lineNo ? 'Linia ' + it.lineNo : '-') + '</td>' +
+                '<td><button type="button" class="btn-reject ni-reject">Respinge</button></td>' +
+                '</tr>';
+        }
+
+        document.getElementById('niApplyAllBtn').addEventListener('click', function () {
+            var cls = document.getElementById('niBulkClass').value;
+            document.querySelectorAll('#niBody .ni-class').forEach(function (i) { i.value = cls; });
+        });
+
+        document.getElementById('niBody').addEventListener('click', function (e) {
+            if (!e.target.classList.contains('ni-reject')) return;
+            var row = e.target.closest('tr');
+            if (!confirm('Respingi acest articol? Linia nu va fi postata cu cod ERP.')) return;
+            e.target.disabled = true;
+            fetch('/ui/catalog/new-items/' + row.dataset.id, { method: 'DELETE' })
+                .then(function (r) {
+                    if (r.ok) row.remove();
+                    else e.target.disabled = false;
+                })
+                .catch(function () { e.target.disabled = false; });
+        });
+
+        document.getElementById('niAcceptBtn').addEventListener('click', function () {
+            var rows = Array.from(document.querySelectorAll('#niBody tr[data-id]'));
+            var err = document.getElementById('niError');
+            err.textContent = '';
+            if (rows.length === 0) { advance(); return; }
+
+            var missingClass = rows.some(function (r) {
+                return !r.querySelector('.ni-class').value.trim();
+            });
+            if (missingClass && !confirm('Unele articole nu au o clasa alocata. Continuati oricum?')) return;
+
+            var btn = this;
+            btn.disabled = true;
+            acceptRows(rows, btn, err);
+        });
+
+        function acceptOne(row) {
+            var data = {
+                erpItemCode: row.querySelector('.ni-erp').value,
+                name: row.querySelector('.ni-name').value,
+                uom: row.querySelector('.ni-uom').value,
+                externalCode: row.querySelector('.ni-ext').value,
+                propertyClass: row.querySelector('.ni-class').value
+            };
+            return fetch('/ui/catalog/new-items/' + row.dataset.id + '/accept', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(function (r) { return r.ok; }).catch(function () { return false; });
+        }
+
+        // Accept every row, one at a time (sequential keeps SQLite writes off each other's
+        // toes). A single failure must NOT abort the batch: succeeded rows are removed,
+        // failed rows stay highlighted so the user can re-run "Accepta si continua" to retry
+        // just those. Only advance once every item is accepted.
+        function acceptRows(rows, btn, err) {
+            var total = rows.length;
+            var failed = 0;
+            var i = 0;
+            function step() {
+                if (i >= rows.length) {
+                    btn.disabled = false;
+                    if (failed === 0) { advance(); return; }
+                    err.textContent = failed + ' din ' + total + ' articole nu s-au putut accepta. ' +
+                        'Cele acceptate au fost eliminate — apasati din nou pentru a reincerca restul.';
+                    return;
+                }
+                var row = rows[i++];
+                acceptOne(row).then(function (ok) {
+                    if (ok) {
+                        if (row.parentNode) row.remove();
+                    } else {
+                        failed++;
+                        row.style.background = 'var(--c-danger-bg)';
+                    }
+                    step();
+                });
+            }
+            step();
+        }
+
+        function advance() {
+            queueIndex++;
+            if (queueIndex < queue.length) {
+                openModalForCurrent();
+            } else {
+                closeModal();
+                finish();
+            }
+        }
+
+        function closeModal() {
+            modal.classList.remove('active');
+            document.getElementById('niPdfFrame').src = '';
+        }
+
+        document.getElementById('niCancelBtn').addEventListener('click', function () {
+            closeModal();
+            queue = [];
+            queueIndex = 0;
+            onComplete = null;
+        });
+
+        window.NewItemsModal = { run: run };
+    })();
+</script>

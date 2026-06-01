@@ -182,38 +182,37 @@ public class UiController(AppDbContext db, IPostingJobService postingJobService)
         return Ok();
     }
 
-    [HttpGet("catalog/new-items")]
-    public async Task<IActionResult> GetNewItems(CancellationToken cancellationToken)
+    [HttpGet("documents/{id:guid}/new-items")]
+    public async Task<IActionResult> GetDocumentNewItems(Guid id, CancellationToken cancellationToken)
     {
-        var items = await db.CatalogItems
-            .Where(c => c.IsAutoCreated && c.AcceptedAt == null && c.Active)
-            .OrderByDescending(c => c.AutoCreatedAt)
-            .Select(c => new { c.Id, c.ErpItemCode, c.Name, c.Uom, c.AutoCreatedAt })
+        var lines = await db.InvoiceLines
+            .Where(l => l.DocumentId == id && l.MatchedItem != null
+                        && l.MatchedItem.IsAutoCreated && l.MatchedItem.AcceptedAt == null
+                        && l.MatchedItem.Active)
+            .Include(l => l.MatchedItem)
+            .OrderBy(l => l.LineNo)
             .ToListAsync(cancellationToken);
 
-        // Find source document + line number for each new item
-        var itemIds = items.Select(i => i.Id).ToList();
-        var sources = await db.InvoiceLines
-            .Where(l => l.MatchedItemId != null && itemIds.Contains(l.MatchedItemId.Value))
-            .Include(l => l.Document)
-            .GroupBy(l => l.MatchedItemId)
-            .Select(g => new { CatalogItemId = g.Key, Line = g.OrderBy(l => l.LineNo).First() })
-            .ToListAsync(cancellationToken);
-        var sourceMap = sources.ToDictionary(s => s.CatalogItemId!.Value, s => s.Line);
-
-        var result = items.Select(i =>
-        {
-            sourceMap.TryGetValue(i.Id, out var srcLine);
-            return new
+        // One row per distinct auto-created catalog item; keep the first source line.
+        var result = lines
+            .GroupBy(l => l.MatchedItemId!.Value)
+            .Select(g =>
             {
-                i.Id, i.ErpItemCode, i.Name, i.Uom, i.AutoCreatedAt,
-                DocumentId = srcLine?.DocumentId,
-                InvoiceNo = srcLine?.Document?.InvoiceNo ?? srcLine?.Document?.Filename,
-                LineNo = srcLine?.LineNo,
-                ExternalCode = srcLine?.ExternalCode,
-                PropertyClass = srcLine?.PropertyClass
-            };
-        });
+                var line = g.OrderBy(l => l.LineNo).First();
+                var item = line.MatchedItem!;
+                return new
+                {
+                    item.Id,
+                    item.ErpItemCode,
+                    item.Name,
+                    item.Uom,
+                    LineNo = line.LineNo,
+                    ExternalCode = line.ExternalCode,
+                    PropertyClass = line.PropertyClass
+                };
+            })
+            .ToList();
+
         return Ok(result);
     }
 
@@ -228,14 +227,25 @@ public class UiController(AppDbContext db, IPostingJobService postingJobService)
         item.Uom = request.Uom;
         item.AcceptedAt = DateTime.UtcNow; // stays IsAutoCreated=true until confirmed by CSV import
 
-        // Always load the source invoice line: ExternalCode may fall back to it, and PropertyClass is only on the line.
-        var srcLine = await db.InvoiceLines
+        // Load every invoice line matched to this item. ExternalCode/PropertyClass live on
+        // the line (not the catalog item), so edits made in the popup must be written back
+        // here — otherwise the posted invoice would carry the stale, pre-edit values.
+        var matchedLines = await db.InvoiceLines
             .Where(l => l.MatchedItemId == item.Id)
             .OrderBy(l => l.LineNo)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
+        var srcLine = matchedLines.FirstOrDefault();
 
         var externalCode = string.IsNullOrWhiteSpace(request.ExternalCode) ? srcLine?.ExternalCode : request.ExternalCode;
         var propertyClass = string.IsNullOrWhiteSpace(request.PropertyClass) ? srcLine?.PropertyClass : request.PropertyClass;
+
+        // Persist the popup edits back onto the matched lines so the invoice posting
+        // payload (which reads ExternalCode/PropertyClass from the line) stays in sync.
+        foreach (var line in matchedLines)
+        {
+            if (!string.IsNullOrWhiteSpace(request.ExternalCode)) line.ExternalCode = request.ExternalCode;
+            if (!string.IsNullOrWhiteSpace(request.PropertyClass)) line.PropertyClass = request.PropertyClass;
+        }
 
         // Create a catalog job for the robot to process
         var payload = new CatalogItemPayload(Guid.NewGuid(), item.Id, item.ErpItemCode, item.Name, item.Uom, externalCode, propertyClass);

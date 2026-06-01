@@ -16,7 +16,6 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
     public List<Guid> SelectedDocumentIds { get; set; } = [];
 
     public List<SupplierGroup> SupplierGroups { get; set; } = [];
-    public int NewItemsCount { get; set; }
     public string? Message { get; set; }
 
     private static readonly DocumentStatus[] ActionableStatuses =
@@ -65,7 +64,6 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
             .ToList();
 
         SupplierGroups = groups;
-        NewItemsCount = await db.CatalogItems.CountAsync(c => c.IsAutoCreated && c.AcceptedAt == null && c.Active, cancellationToken);
     }
 
     public async Task<IActionResult> OnPostRefreshAsync(CancellationToken cancellationToken)
@@ -80,8 +78,21 @@ public class IndexModel(AppDbContext db, IPostingJobService postingJobService, I
         if (SelectedDocumentIds.Count == 0)
             return RedirectToPage(new { message = "No invoices selected." });
 
-        var jobs = await postingJobService.CreatePostingJobsAsync(SelectedDocumentIds, cancellationToken);
-        return RedirectToPage(new { message = $"{jobs.Count} job(s) created successfully." });
+        // Never post a document whose extraction checks failed, even if the disabled
+        // checkbox was bypassed.
+        var allowedIds = await db.Documents
+            .Where(d => SelectedDocumentIds.Contains(d.Id) && !d.TransferBlocked)
+            .Select(d => d.Id)
+            .ToListAsync(cancellationToken);
+
+        var blockedCount = SelectedDocumentIds.Count - allowedIds.Count;
+        if (allowedIds.Count == 0)
+            return RedirectToPage(new { message = "Transfer blocat: facturile selectate au esuat verificarile de extractie." });
+
+        var jobs = await postingJobService.CreatePostingJobsAsync(allowedIds, cancellationToken);
+        var msg = $"{jobs.Count} job(s) created successfully.";
+        if (blockedCount > 0) msg += $" {blockedCount} factura(e) blocata(e) la transfer.";
+        return RedirectToPage(new { message = msg });
     }
 
     public static bool IsSelectable(Document doc) =>

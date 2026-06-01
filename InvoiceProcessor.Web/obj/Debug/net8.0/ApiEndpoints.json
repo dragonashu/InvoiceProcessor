@@ -16,6 +16,22 @@
     ]
   },
   {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.CatalogController",
+    "Method": "Import",
+    "RelativePath": "catalog/import",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "InvoiceProcessor.Web.Controllers.CatalogController\u002BCatalogImportRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
     "ContainingType": "InvoiceProcessor.Web.Controllers.RobotController",
     "Method": "List",
     "RelativePath": "robot/jobs",
@@ -170,16 +186,6 @@
         "IsRequired": true
       }
     ],
-    "ReturnTypes": []
-  },
-  {
-    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
-    "Method": "GetNewItems",
-    "RelativePath": "ui/catalog/new-items",
-    "HttpMethod": "GET",
-    "IsController": true,
-    "Order": 0,
-    "Parameters": [],
     "ReturnTypes": []
   },
   {
@@ -346,6 +352,22 @@
       {
         "Name": "request",
         "Type": "InvoiceProcessor.Web.Controllers.UiController\u002BAttachCustomsRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "InvoiceProcessor.Web.Controllers.UiController",
+    "Method": "GetDocumentNewItems",
+    "RelativePath": "ui/documents/{id}/new-items",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Guid",
         "IsRequired": true
       }
     ],

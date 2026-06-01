@@ -121,7 +121,8 @@ public class EditModel(AppDbContext db, IInvoiceValidator validator, IMatchingEn
             new CanonicalMetadata(
                 existingInvoice?.Metadata?.Confidence ?? doc.Confidence,
                 existingInvoice?.Metadata?.Strategy ?? "ManualEdit",
-                "Editat manual"));
+                "Editat manual"),
+            existingInvoice?.ExpectedLineCount);
 
         var canonical = JsonSerializer.Serialize(updatedInvoice);
         artifact.CanonicalJson = canonical;

@@ -280,8 +280,17 @@ public class MatchingEngine(AppDbContext db, ILogger<MatchingEngine> logger) : I
             });
         }
 
-        var minConfidence = db.InvoiceLines.Local.Where(x => x.DocumentId == documentId).Select(x => x.MatchConfidence).DefaultIfEmpty(0m).Min();
-        document.Status = minConfidence < 0.75m ? DocumentStatus.NeedsReview : DocumentStatus.ReadyToPost;
+        // Match confidence no longer gates the invoice: new items (auto-created proposals)
+        // are reviewed in the send-time modal, not by parking the whole invoice in review.
+        // Only a low-confidence match against an EXISTING catalog item still needs a human.
+        string[] newItemReasons = ["auto-created", "yildiz-new-item"];
+        var hasUncertainMatch = db.InvoiceLines.Local
+            .Where(x => x.DocumentId == documentId)
+            .Any(x => x.MatchConfidence < 0.75m && !newItemReasons.Contains(x.MatchReason));
+        document.Status = hasUncertainMatch ? DocumentStatus.NeedsReview : DocumentStatus.ReadyToPost;
+
+        // Block transfer when the extraction sanity checks fail (dropped lines / total mismatch).
+        document.TransferBlocked = !ExtractionChecks.Evaluate(invoice).TransferAllowed;
 
         await db.SaveChangesAsync(cancellationToken);
 

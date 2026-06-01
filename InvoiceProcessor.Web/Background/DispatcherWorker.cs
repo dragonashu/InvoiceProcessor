@@ -11,6 +11,7 @@ public class DispatcherWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var pollSeconds = configuration.GetValue<int?>("App:Email:PollSeconds") ?? 30;
+        var autoImport = configuration.GetValue<bool?>("App:Email:AutoImport") ?? false;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -20,9 +21,14 @@ public class DispatcherWorker(
                 var pipeline = scope.ServiceProvider.GetRequiredService<IExtractionPipeline>();
                 var dviScanner = scope.ServiceProvider.GetRequiredService<IDviFolderScanner>();
 
-                var ingested = await dispatcher.PollAsync(stoppingToken);
-                if (ingested > 0)
-                    logger.LogInformation("Ingested {Count} new document(s)", ingested);
+                // Auto-import is disabled by default; PDFs are ingested on demand
+                // via the inbox "Reimporta fisiere" button (OnPostRefreshAsync).
+                if (autoImport)
+                {
+                    var ingested = await dispatcher.PollAsync(stoppingToken);
+                    if (ingested > 0)
+                        logger.LogInformation("Ingested {Count} new document(s)", ingested);
+                }
 
                 await pipeline.ProcessPendingAsync(stoppingToken);
 

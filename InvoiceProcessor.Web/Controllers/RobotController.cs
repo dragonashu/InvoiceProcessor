@@ -105,12 +105,14 @@ public class RobotController(IPostingJobService postingJobService, AppDbContext 
     // ─── Catalog item jobs (same pattern: queue → claim → complete) ───
 
     [HttpGet("catalog")]
-    public async Task<IActionResult> ListCatalogJobs([FromQuery] string? status, [FromQuery] int limit = 50, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ListCatalogJobs([FromQuery] string? status, [FromQuery] int limit = 200, CancellationToken cancellationToken = default)
     {
         var query = db.CatalogJobs.Include(j => j.CatalogItem).AsQueryable();
         if (status is not null && Enum.TryParse<CatalogJobStatus>(status, true, out var s))
             query = query.Where(j => j.Status == s);
-        var jobs = await query.OrderBy(j => j.CreatedAt).Take(Math.Clamp(limit, 1, 200)).ToListAsync(cancellationToken);
+        // Newest first so a freshly-approved batch is fully visible and never buried
+        // behind older (already-processed) jobs once the count exceeds the page size.
+        var jobs = await query.OrderByDescending(j => j.CreatedAt).Take(Math.Clamp(limit, 1, 500)).ToListAsync(cancellationToken);
         return Ok(jobs.Select(j =>
         {
             var p = JsonSerializer.Deserialize<CatalogItemPayload>(j.RequestJson);

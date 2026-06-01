@@ -9,7 +9,8 @@ public record CanonicalInvoice(
     decimal? VatTotal,
     decimal? GrossTotal,
     IReadOnlyList<CanonicalInvoiceLine> Lines,
-    CanonicalMetadata Metadata);
+    CanonicalMetadata Metadata,
+    int? ExpectedLineCount = null);
 
 public record CanonicalInvoiceLine(string? CodIntern, string DescriptionRaw, decimal Qty, string? Uom, decimal? UnitPrice, decimal LineTotal, string? Bare = null, string? ExternalCode = null, string? PropertyClass = null);
 

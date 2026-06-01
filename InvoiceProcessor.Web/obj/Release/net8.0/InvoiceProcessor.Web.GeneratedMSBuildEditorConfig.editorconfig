@@ -40,6 +40,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU2hhcmVkXF9MYXlvdXQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/it/InvoiceProcessor/InvoiceProcessor.Web/Pages/Shared/_NewItemsModal.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU2hhcmVkXF9OZXdJdGVtc01vZGFsLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/it/InvoiceProcessor/InvoiceProcessor.Web/Pages/Stats/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU3RhdHNcSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 

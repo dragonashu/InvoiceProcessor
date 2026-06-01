@@ -17,6 +17,10 @@ public class EmailOptions
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public int PollSeconds { get; set; } = 30;
+
+    // When false, the background worker does not auto-ingest PDFs;
+    // import happens only via the inbox "Reimporta fisiere" button.
+    public bool AutoImport { get; set; }
 }
 
 public class StorageOptions

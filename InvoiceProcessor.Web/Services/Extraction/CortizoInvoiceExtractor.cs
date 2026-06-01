@@ -20,6 +20,8 @@ public class CortizoInvoiceExtractor : ISupplierInvoiceExtractor
     private const double ColBare_MaxX = 145;
     private const double ColLung_MinX = 145;
     private const double ColLung_MaxX = 178;
+    private const double ColFinisaj_MinX = 178;
+    private const double ColFinisaj_MaxX = 375;
     private const double ColCantitate_MinX = 375;
     private const double ColCantitate_MaxX = 432;
     private const double ColUnit_MinX = 432;
@@ -183,12 +185,19 @@ public class CortizoInvoiceExtractor : ISupplierInvoiceExtractor
                 .Where(w => w.BoundingBox.Bottom < TableHeaderY && w.BoundingBox.Bottom > TableFooterY)
                 .ToList();
 
-            // Find line number anchors (P column)
-            var lineAnchors = FindLineNumberAnchors(tableWords);
+            // The body of the table ends at the first non-item marker
+            // ("SUBTOTAL COMANDĂ", "Factura este valabila...", "COD.INTRAST.").
+            // Below that line are subtotals and recap tables that must not be
+            // parsed as items. See FRA-66317-R11-2088-2026-14 where the
+            // COD.INTRAST. recap polluted line 6's description.
+            var bodyFooterY = FindBodyFooterY(words);
+
+            // Find line number anchors (P column) above the body footer
+            var lineAnchors = FindLineNumberAnchors(tableWords, bodyFooterY);
 
             foreach (var anchor in lineAnchors)
             {
-                var row = ExtractRow(anchor, tableWords, lineAnchors);
+                var row = ExtractRow(anchor, tableWords, lineAnchors, bodyFooterY);
                 if (row != null)
                     allRows.Add(row);
             }
@@ -208,13 +217,47 @@ public class CortizoInvoiceExtractor : ISupplierInvoiceExtractor
             .ToList();
     }
 
-    private static List<(int lineNo, double y)> FindLineNumberAnchors(List<Word> tableWords)
+    // Returns the highest Y of any marker that signals the end of the item
+    // body on a Cortizo page. Falls back to TableFooterY if no marker found.
+    private static double FindBodyFooterY(List<Word> pageWords)
+    {
+        var subtotal = pageWords
+            .Where(w => w.Text.Equals("SUBTOTAL", StringComparison.OrdinalIgnoreCase))
+            .Select(w => (double?)w.BoundingBox.Bottom)
+            .DefaultIfEmpty(null)
+            .Max();
+
+        var facturaY = pageWords
+            .Where(w => w.Text.Equals("Factura", StringComparison.OrdinalIgnoreCase))
+            .Select(w => w.BoundingBox.Bottom)
+            .Where(y => pageWords.Any(w2 =>
+                w2.Text.Equals("valabila", StringComparison.OrdinalIgnoreCase) &&
+                Math.Abs(w2.BoundingBox.Bottom - y) < 3))
+            .Select(y => (double?)y)
+            .DefaultIfEmpty(null)
+            .Max();
+
+        var codIntrast = pageWords
+            .Where(w => w.Text.StartsWith("COD.INTRAST", StringComparison.OrdinalIgnoreCase))
+            .Select(w => (double?)w.BoundingBox.Bottom)
+            .DefaultIfEmpty(null)
+            .Max();
+
+        double max = TableFooterY;
+        if (subtotal.HasValue) max = Math.Max(max, subtotal.Value);
+        if (facturaY.HasValue) max = Math.Max(max, facturaY.Value);
+        if (codIntrast.HasValue) max = Math.Max(max, codIntrast.Value);
+        return max;
+    }
+
+    private static List<(int lineNo, double y)> FindLineNumberAnchors(List<Word> tableWords, double bodyFooterY)
     {
         var anchors = new List<(int lineNo, double y)>();
 
         foreach (var w in tableWords)
         {
             if (w.BoundingBox.Left < ColP_MaxX &&
+                w.BoundingBox.Bottom > bodyFooterY &&
                 int.TryParse(w.Text, out var lineNo) &&
                 lineNo >= 1 && lineNo <= 999)
             {
@@ -225,15 +268,15 @@ public class CortizoInvoiceExtractor : ISupplierInvoiceExtractor
         return anchors.OrderByDescending(a => a.y).ToList(); // Top to bottom (decreasing Y)
     }
 
-    private static RawRow? ExtractRow((int lineNo, double y) anchor, List<Word> tableWords, List<(int lineNo, double y)> allAnchors)
+    private static RawRow? ExtractRow((int lineNo, double y) anchor, List<Word> tableWords, List<(int lineNo, double y)> allAnchors, double bodyFooterY)
     {
         var anchorY = anchor.y;
 
-        // Determine the Y range for this row's description (down to next anchor or end of table)
+        // Determine the Y range for this row's description (down to next anchor or body footer)
         var nextAnchorY = allAnchors
             .Where(a => a.y < anchorY - 5)
             .Select(a => (double?)a.y)
-            .FirstOrDefault() ?? TableFooterY;
+            .FirstOrDefault() ?? bodyFooterY;
         var descYBottom = nextAnchorY + 5; // A few points above the next row
 
         // For numeric columns, find the closest word within tight Y tolerance
@@ -257,6 +300,24 @@ public class CortizoInvoiceExtractor : ISupplierInvoiceExtractor
             .ToList();
 
         var description = string.Join(" ", descWords).Trim();
+
+        // Fallback: TAXA-style rows (e.g. "TAXA VOPSIRE") leave the REF and
+        // local-name columns empty — the code and description live in the
+        // FINISAJ column instead. Pull from there to avoid an empty desc.
+        if (string.IsNullOrEmpty(description))
+        {
+            var finisajWords = tableWords
+                .Where(w => w.BoundingBox.Left >= ColFinisaj_MinX &&
+                            w.BoundingBox.Left < ColFinisaj_MaxX &&
+                            w.BoundingBox.Bottom <= anchorY + 2 &&
+                            w.BoundingBox.Bottom > descYBottom)
+                .OrderByDescending(w => w.BoundingBox.Bottom)
+                .ThenBy(w => w.BoundingBox.Left)
+                .Select(w => w.Text)
+                .ToList();
+            description = string.Join(" ", finisajWords).Trim();
+        }
+
         if (string.IsNullOrEmpty(description))
             description = $"Line {anchor.lineNo}";
 

@@ -22,6 +22,7 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
     {
         var header = ExtractHeader(pdf, rawText);
         var lines = ExtractLineItems(pdf);
+        var printedLineCount = FindPrintedLineCount(pdf);
 
         var lineSum = lines.Sum(l => l.LineTotal);
         decimal confidence = 0.85m;
@@ -46,7 +47,31 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             VatTotal: header.VatTotal,
             GrossTotal: header.GrossTotal,
             Lines: lines,
-            Metadata: new CanonicalMetadata(confidence, "AliplastExtractor", notes));
+            Metadata: new CanonicalMetadata(confidence, "AliplastExtractor", notes),
+            ExpectedLineCount: printedLineCount);
+    }
+
+    /// The invoice prints a sequential line number in the far-left column of every
+    /// item row (1, 2, 3, … up to the last line). The highest such number is the
+    /// count of item lines the PDF contains — used to detect dropped lines during
+    /// extraction. Returns null when no line-number column is found.
+    private static int? FindPrintedLineCount(PdfDocument pdf)
+    {
+        var max = 0;
+        for (int p = 1; p <= pdf.NumberOfPages; p++)
+        {
+            foreach (var w in pdf.GetPage(p).GetWords())
+            {
+                // The line-number column sits left of the item-code column (codes start
+                // at L≈40). Numbers are 1–3 plain digits, right edge ≤ 40.
+                if (w.BoundingBox.Left >= 25 && w.BoundingBox.Right <= 40 &&
+                    Regex.IsMatch(w.Text, @"^\d{1,3}$") &&
+                    int.TryParse(w.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var n) &&
+                    n > max)
+                    max = n;
+            }
+        }
+        return max > 0 ? max : null;
     }
 
     private static HeaderData ExtractHeader(PdfDocument pdf, string text)
@@ -222,10 +247,11 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
 
     private record ItemAnchor(string ItemCode, double Y);
 
-    // Regex for Aliplast item codes: starts with letter(s), contains digits
-    // Allows underscores (ACFR135_G) and multiple slash groups (GT490/AN/7, EF260/MF/6.6)
+    // Regex for Aliplast item codes: starts with letter(s), contains digits.
+    // Allows underscores (ACFR135_G), hyphens (ACFX531-500/IN) and multiple slash
+    // groups (GT490/AN/7, EF260/MF/6.6).
     private static readonly Regex ItemCodePattern = new(
-        @"^[A-Z][A-Z\d._]+[\dA-Z](?:/[\w.]+)*$", RegexOptions.Compiled);
+        @"^[A-Z][A-Z\d._-]+[\dA-Z](?:/[\w.]+)*$", RegexOptions.Compiled);
 
     private static List<ItemAnchor> FindItemAnchors(List<Word> tableWords, ColumnLayout cols)
     {
@@ -310,21 +336,25 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             .FirstOrDefault();
         var descYBottom = nextAnchorYForDesc.HasValue ? nextAnchorYForDesc.Value + 3 : anchorY - 50;
 
-        // Last item on page: cap the description area at the first footer marker below
-        // (e.g. "Order line total", "VAT Report", "Commodity Code") so footer text
-        // doesn't leak into the description.
-        if (!nextAnchorYForDesc.HasValue)
-        {
-            var footerTokens = new HashSet<string> { "VAT", "Order", "Report", "Commodity", "Registers", "Payment", "Terms", "Net", "Gross", "Salesman", "Sales" };
-            var footerTop = tableWords
-                .Where(w => w.BoundingBox.Bottom < anchorY - 2 &&
-                            footerTokens.Contains(w.Text))
-                .OrderByDescending(w => w.BoundingBox.Bottom)
-                .Select(w => (double?)w.BoundingBox.Bottom)
-                .FirstOrDefault();
-            if (footerTop.HasValue)
-                descYBottom = footerTop.Value + 3;
-        }
+        // Cap the description area at the first boundary marker below this line — an
+        // order-block boundary ("Order line total" / "Order number") or a page/document
+        // footer ("VAT report", "Registers", ...) — so text from the next order block
+        // does not leak into the description. This applies to every line, not just the
+        // last one on a page: a line that ends an order block has the next block's
+        // heading directly beneath it.
+        // NOTE: "Commodity" is deliberately NOT a boundary token — each line carries its
+        // own "Commodity code:" row on the SAME Y as the variant (I:/E:/L:) row, so
+        // capping there would hide the variant info.
+        var boundaryTokens = new HashSet<string> { "VAT", "Order", "Report", "Registers", "Payment", "Terms", "Net", "Gross", "Salesman", "Sales" };
+        var boundaryTop = tableWords
+            .Where(w => w.BoundingBox.Bottom < anchorY - 2 &&
+                        w.BoundingBox.Bottom > descYBottom &&
+                        boundaryTokens.Contains(w.Text))
+            .OrderByDescending(w => w.BoundingBox.Bottom)
+            .Select(w => (double?)w.BoundingBox.Bottom)
+            .FirstOrDefault();
+        if (boundaryTop.HasValue)
+            descYBottom = boundaryTop.Value + 3;
 
         var descWords = tableWords
             .Where(w => w.BoundingBox.Left >= 25 &&
@@ -375,6 +405,12 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
         if (!string.IsNullOrEmpty(descSuffix))
             description = string.IsNullOrEmpty(description) ? descSuffix : $"{description} {descSuffix}";
 
+        // New-item class proposal: a line whose variant row carries an "L:<digits>"
+        // length mark is a system profile; everything else is an accessory.
+        var propertyClass = HasLengthMark(tableWords, anchorY, descYBottom)
+            ? "PROFILE DE SISTEM AL"
+            : "ACCESORII DE SISTEM";
+
         return new CanonicalInvoiceLine(
             CodIntern: codIntern,
             DescriptionRaw: description,
@@ -382,7 +418,8 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             Uom: NormalizeUnit(unit),
             UnitPrice: qty > 0 ? Math.Round(amount / qty, 4) : null,
             LineTotal: amount,
-            ExternalCode: apiCode);
+            ExternalCode: apiCode,
+            PropertyClass: propertyClass);
     }
 
     /// Extracts variant-line info.
@@ -447,12 +484,45 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             }
         }
 
-        var parts = new List<string>();
-        if (apiCode != null) parts.Add($"RAL{apiCode}");
-        if (!string.IsNullOrEmpty(lValueText)) parts.Add(lValueText);
-        var suffix = parts.Count > 0 ? string.Join(" ", parts) : null;
+        // The RAL colour is appended to the description; the length is appended only
+        // next to it. A lone length value (no colour code, e.g. "I: ZWART L:6,600")
+        // is dropped — on its own it would just pollute a proposed new item's name.
+        string? suffix = null;
+        if (apiCode != null)
+        {
+            suffix = $"RAL{apiCode}";
+            if (!string.IsNullOrEmpty(lValueText))
+                suffix += $" {lValueText}";
+        }
 
         return (suffix, apiCode);
+    }
+
+    /// True when the line's variant row carries an "L:&lt;digits&gt;" length mark
+    /// (e.g. L:3,000 / L:6,500). On Aliplast invoices this marks a system profile
+    /// (sold by length) as opposed to an accessory. Independent of the I: marker —
+    /// some profile lines (e.g. ACVS01) print L: with no colour code.
+    private static bool HasLengthMark(List<Word> tableWords, double anchorY, double bottomY)
+    {
+        var variantWords = tableWords
+            .Where(w => w.BoundingBox.Bottom < anchorY - 2 && w.BoundingBox.Bottom > bottomY)
+            .ToList();
+
+        // Merged form: "L:6,500"
+        if (variantWords.Any(w => Regex.IsMatch(w.Text, @"^L:\s*\d")))
+            return true;
+
+        // Separate form: "L:" marker followed by a numeric value on the same row
+        foreach (var lMarker in variantWords.Where(w => w.Text == "L:"))
+        {
+            if (variantWords.Any(w =>
+                    Math.Abs(w.BoundingBox.Bottom - lMarker.BoundingBox.Bottom) < 3 &&
+                    w.BoundingBox.Left > lMarker.BoundingBox.Right - 1 &&
+                    w.BoundingBox.Left < lMarker.BoundingBox.Right + 30 &&
+                    Regex.IsMatch(w.Text, @"^\d[\d.,]*$")))
+                return true;
+        }
+        return false;
     }
 
     /// Finds the color code from the variant line (e.g. "I: 7016M") below an item anchor.
@@ -519,14 +589,25 @@ public class AliplastInvoiceExtractor : ISupplierInvoiceExtractor
             m.Text != w.Text);
     }
 
-    private static string? NormalizeUnit(string? unit) => unit?.ToUpperInvariant() switch
+    // Unit column "L7", "L6,5", "L4,32" … — an "L" followed by the bar length (in metres).
+    // Every such L-length notation marks a profile sold per bar, so the UOM is BARE (rods).
+    private static readonly Regex LengthUnitPattern = new(@"^L\s*\d+(?:[.,]\d+)?$", RegexOptions.Compiled);
+
+    private static string? NormalizeUnit(string? unit)
     {
-        "SZT" => "BUC",
-        "KPL" => "SET",
-        "LM" => "ML",
-        "LGT" => "BARE",
-        _ => unit
-    };
+        if (string.IsNullOrWhiteSpace(unit)) return unit;
+        var u = unit.Trim().ToUpperInvariant();
+        if (LengthUnitPattern.IsMatch(u))
+            return "BARE";
+        return u switch
+        {
+            "SZT" => "BUC",
+            "KPL" => "SET",
+            "LM" => "ML",
+            "LGT" => "BARE",
+            _ => unit
+        };
+    }
 
     private class HeaderData
     {
